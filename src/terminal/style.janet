@@ -59,10 +59,11 @@
     @[]))
 
 (defn style-sgr
-  "Build the SGR parameter string for a style (e.g. \"1;31\")."
+  "Build the SGR parameter string for a style (e.g. \"0;1;31\").
+   Always starts with reset (0) so attributes from previous styles are cleared."
   [style]
   (when (nil? style) (break "0"))
-  (def codes @[])
+  (def codes @["0"])
   (when (style :bold) (array/push codes "1"))
   (when (style :dim) (array/push codes "2"))
   (when (style :italic) (array/push codes "3"))
@@ -70,7 +71,7 @@
   (when (style :reverse) (array/push codes "7"))
   (array/concat codes (color-sgr-codes (style :fg) false))
   (array/concat codes (color-sgr-codes (style :bg) true))
-  (if (empty? codes) "0" (string/join codes ";")))
+  (string/join codes ";"))
 
 (defn style-sequence
   "Return the full ANSI escape sequence string for a style."

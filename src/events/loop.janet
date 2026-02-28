@@ -6,16 +6,18 @@
 
 (var- tty-fd nil)
 (var- last-size nil)
+(var- size-check-counter 0)
 
 (defn start
   "Open /dev/tty for raw reading."
   []
   (set tty-fd (platform/open-tty))
-  (set last-size (platform/get-terminal-size)))
+  (set last-size (platform/get-terminal-size))
+  (set size-check-counter 0))
 
 (defn read-events
   "Wait for input (up to 100ms), then return events.
-   Generates resize events when terminal size changes."
+   Generates resize events when terminal size changes (checked every ~500ms)."
   []
   (def events @[])
 
@@ -24,11 +26,15 @@
   (when bytes
     (array/concat events (types/parse-input bytes)))
 
-  # Check if terminal was resized
-  (def size (platform/get-terminal-size))
-  (when (not= size last-size)
-    (set last-size size)
-    (array/push events (types/resize-event (get size 0) (get size 1))))
+  # Check terminal size every 5 iterations (~500ms) to avoid
+  # subprocess overhead and SIGCHLD interference with read()
+  (++ size-check-counter)
+  (when (>= size-check-counter 5)
+    (set size-check-counter 0)
+    (def size (platform/get-terminal-size))
+    (when (not= size last-size)
+      (set last-size size)
+      (array/push events (types/resize-event (get size 0) (get size 1)))))
 
   events)
 

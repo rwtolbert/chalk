@@ -210,10 +210,15 @@
   (> ret 0))
 
 (defn read-tty
-  "Blocking read from a raw fd. Returns a buffer of bytes read, or nil on error."
+  "Blocking read from a raw fd. Returns a buffer of bytes read, or nil on timeout/error.
+   Retries automatically if interrupted by a signal (EINTR)."
   [fd nbytes]
   (def buf (buffer/new-filled nbytes 0))
-  (def n (int/to-number (read fd buf nbytes)))
+  (var n -1)
+  (var retries 0)
+  (while (and (< n 0) (< retries 3))
+    (set n (int/to-number (read fd buf nbytes)))
+    (++ retries))
   (if (> n 0)
     (buffer/slice buf 0 n)
     nil))

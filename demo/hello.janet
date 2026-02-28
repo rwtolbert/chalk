@@ -118,3 +118,4 @@
         (redraw scr current-cols current-rows last-key mouse-pos)))))
 
 (main)
+(os/exit 0)
