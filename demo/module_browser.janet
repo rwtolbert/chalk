@@ -92,8 +92,8 @@
               (when (> (length modules) 0)
                 (put seen entry true)
                 (array/push results @{:name entry
-                                       :modules modules
-                                       :expanded false})))))))
+                                      :modules modules
+                                      :expanded false})))))))
     ([_] nil))
   results)
 
@@ -226,7 +226,7 @@
             (array/push lines (string/slice remaining 0 break-at))
             (set remaining (string/slice remaining (+ break-at 1))))
           (do
-            # No space found — hard break
+            # No space found -- hard break
             (array/push lines (string/slice remaining 0 max-width))
             (set remaining (string/slice remaining max-width)))))
       (when (> (length remaining) 0)
@@ -235,29 +235,49 @@
 
 (var detail-wrap-width 60)
 
+(def type-colors
+  {"function" {:fg :cyan}
+   "cfunction" {:fg :cyan}
+   "macro" {:fg :magenta}
+   "number" {:fg :yellow}
+   "string" {:fg :green}
+   "boolean" {:fg :yellow}
+   "keyword" {:fg :green}
+   "table" {:fg :yellow}
+   "array" {:fg :yellow}
+   "tuple" {:fg :yellow}
+   "fiber" {:fg :red}
+   "nil" {:fg :bright-black}})
+
 (defn- build-detail-items
   "Format exports into display strings for the detail list.
-   When filter-text is non-empty, only shows exports whose name matches."
+   When filter-text is non-empty, only shows exports whose name matches.
+   Returns [items item-styles]."
   [exports &opt filter-text]
   (def ft (if (and filter-text (> (length filter-text) 0))
             (string/ascii-lower filter-text)
             nil))
   (def wrap-width detail-wrap-width)
   (def items @[])
+  (def styles @[])
   (each exp exports
     (when (or (nil? ft)
               (not (nil? (string/find ft (string/ascii-lower (exp :name))))))
+      (def color (get type-colors (exp :type)))
       (array/push items (string (exp :name) " [" (exp :type) "]"))
+      (array/push styles color)
       (when (exp :doc)
         (def doc-lines (string/split "\n" (exp :doc)))
         (each line doc-lines
           (def wrapped (wrap-line (string "  " line) wrap-width))
           (each wl wrapped
-            (array/push items wl))))
-      (array/push items "")))
+            (array/push items wl)
+            (array/push styles nil))))
+      (array/push items "")
+      (array/push styles nil)))
   (if (= (length items) 0)
-    @[(if ft "(no matching exports)" "(no exports)")]
-    items))
+    [@[(if ft "(no matching exports)" "(no exports)")] @[nil]]
+    [items styles]))
 
 # --- Main ---
 
@@ -273,6 +293,7 @@
   (var tree-items @[])
   (var tree-map @[])
   (var detail-items @["Select a module to view exports"])
+  (var detail-styles @[nil])
   (var search-text "")
   (var focus :tree) # :tree, :detail, or :search
   (var selected-mod nil)
@@ -313,6 +334,7 @@
     (def detail-list (list/list-widget
                        :id "detail-list"
                        :items detail-items
+                       :item-styles detail-styles
                        :style {:fg :white}
                        :flex-grow 1))
 
@@ -454,7 +476,9 @@
                 (when selected-mod
                   (def [pkg-name mod-name] (string/split "/" selected-mod 0 2))
                   (def exports (load-module-exports pkg-name mod-name exports-cache))
-                  (set detail-items (build-detail-items exports)))
+                  (let [[di ds] (build-detail-items exports)]
+                    (set detail-items di)
+                    (set detail-styles ds)))
                 (set needs-redraw true))
 
               # Tree focus
@@ -480,7 +504,9 @@
                         :module
                         (do
                           (def exports (load-module-exports (entry :pkg-name) (entry :name) exports-cache))
-                          (set detail-items (build-detail-items exports search-text))
+                          (let [[di ds] (build-detail-items exports search-text)]
+                            (set detail-items di)
+                            (set detail-styles ds))
                           (set selected-mod (string (entry :pkg-name) "/" (entry :name)))
                           (set needs-redraw true)))))
 
@@ -494,7 +520,9 @@
                       (def entry (get tree-map sel))
                       (when (= (entry :type) :module)
                         (def exports (load-module-exports (entry :pkg-name) (entry :name) exports-cache))
-                        (set detail-items (build-detail-items exports search-text))
+                        (let [[di ds] (build-detail-items exports search-text)]
+                          (set detail-items di)
+                          (set detail-styles ds))
                         (set selected-mod (string (entry :pkg-name) "/" (entry :name)))
                         (set needs-redraw true))))))
 
@@ -528,13 +556,15 @@
                         (set found-idx i))))
                   (if found-idx
                     (do
-                      # Current module still visible — keep it selected
+                      # Current module still visible -- keep it selected
                       (set tree-sel-override found-idx)
                       (def [pkg-name mod-name] (string/split "/" selected-mod 0 2))
                       (def exports (load-module-exports pkg-name mod-name exports-cache))
-                      (set detail-items (build-detail-items exports search-text)))
+                      (let [[di ds] (build-detail-items exports search-text)]
+                        (set detail-items di)
+                        (set detail-styles ds)))
                     (do
-                      # Current module gone or none selected — auto-select first module
+                      # Current module gone or none selected -- auto-select first module
                       (var first-mod-idx nil)
                       (for i 0 (length tree-map)
                         (when (and (not first-mod-idx)
@@ -546,10 +576,13 @@
                           (set selected-mod (string (entry :pkg-name) "/" (entry :name)))
                           (set tree-sel-override first-mod-idx)
                           (def exports (load-module-exports (entry :pkg-name) (entry :name) exports-cache))
-                          (set detail-items (build-detail-items exports search-text)))
+                          (let [[di ds] (build-detail-items exports search-text)]
+                            (set detail-items di)
+                            (set detail-styles ds)))
                         (do
                           (set selected-mod nil)
-                          (set detail-items @["No matching exports"])))))
+                          (set detail-items @["No matching exports"])
+                          (set detail-styles @[nil])))))
                   (when result (set needs-redraw true))))))
 
           :resize
@@ -572,7 +605,7 @@
         (set detail-list (get new-ui 2))
         (set search-input (get new-ui 3))
 
-        # Restore selections — use override if set, otherwise preserve old index
+        # Restore selections -- use override if set, otherwise preserve old index
         (def tree-sel
           (if tree-sel-override
             tree-sel-override

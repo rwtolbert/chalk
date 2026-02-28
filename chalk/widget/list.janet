@@ -24,9 +24,10 @@
 (defn list-widget
   ```Create a scrollable list widget.
    items: array of strings
+   item-styles: optional array of style tables parallel to items
    selected: initial selected index (default 0)
    on-select: callback (fn [index item]) called on enter```
-  [&named items selected on-select id classes style
+  [&named items item-styles selected on-select id classes style
    width height flex-grow flex-shrink margin padding dock]
   (default items @[])
   (default selected 0)
@@ -109,13 +110,25 @@
                                               :bg (when effective
                                                     (get effective :bg))))
 
+             (def istyles (state :item-styles))
+
              (for i 0 visible-h
                (def item-idx (+ offset i))
                (def row (+ (rect :row) i))
                (if (< item-idx (length items-list))
                  (do
                    (def item (get items-list item-idx))
-                   (def s (if (= item-idx sel) sel-style normal-style))
+                   # Per-item style override
+                   (def item-s
+                     (when istyles
+                       (when-let [is (get istyles item-idx)]
+                         (style/make-style ;(kvs (if effective (merge effective is) is))))))
+                   (def base-s (or item-s normal-style))
+                   (def s (if (= item-idx sel)
+                            (style/make-style :reverse true
+                                              :fg (when base-s (get (if item-s (get istyles item-idx) (or effective {})) :fg))
+                                              :bg (when effective (get effective :bg)))
+                            base-s))
                    # Clear the line
                    (for c (rect :col) (+ (rect :col) (rect :width))
                      (screen/screen-put scr c row " " s))
@@ -131,6 +144,7 @@
 
   # Initialize state
   (put (w :state) :items items)
+  (put (w :state) :item-styles item-styles)
   (put (w :state) :selected selected)
   (put (w :state) :scroll-offset 0)
   (put (w :state) :on-select on-select)
