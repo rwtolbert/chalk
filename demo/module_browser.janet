@@ -114,10 +114,11 @@
       (each [k v] (pairs env)
         (def name-str (string k))
         # Skip private symbols (starting with _) and module metadata
+        (def meta (if (table? v) v @{}))
         (when (and (not (string/has-prefix? "_" name-str))
                    (not (string/has-prefix? ":" name-str))
-                   (not (find |(= name-str $) ["*module*" "*should-not-redef*" "native"])))
-          (def meta (if (table? v) v @{}))
+                   (not (find |(= name-str $) ["*module*" "*should-not-redef*" "native" "current-file" "source"]))
+                   (not (get meta :private)))
           # Skip re-exported symbols by checking source-map
           # Native (C) modules have source-maps pointing to .c files
           (def sm (get meta :source-map))
