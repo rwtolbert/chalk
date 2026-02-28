@@ -259,7 +259,7 @@
           (container/container
             :id "header"
             :children
-            @[(text/text " Chalk Module Browser " :flex-grow 1)])
+            @[(text/text " Janet Module Browser " :flex-grow 1)])
 
           # Footer
           (container/container
