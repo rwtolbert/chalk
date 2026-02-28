@@ -79,10 +79,13 @@
   (when (get cache cache-key)
     (break (get cache cache-key)))
 
+  (def mod-path (string pkg-name "/" mod-name))
+  (def mod-suffix (string "/" pkg-name "/" mod-name ".janet"))
+
   (def exports @[])
   (try
     (do
-      (def env (require (string pkg-name "/" mod-name)))
+      (def env (require mod-path))
       (each [k v] (pairs env)
         (def name-str (string k))
         # Skip private symbols (starting with _) and module metadata
@@ -90,26 +93,30 @@
                    (not (string/has-prefix? ":" name-str))
                    (not (find |(= name-str $) ["*module*" "*should-not-redef*"])))
           (def meta (if (table? v) v @{}))
-          (def doc-str (get meta :doc))
-          (def value (or (get meta :value) (get meta :ref)))
-          (def type-str
-            (cond
-              (get meta :macro) "macro"
-              (function? value) "function"
-              (cfunction? value) "cfunction"
-              (fiber? value) "fiber"
-              (number? value) "number"
-              (string? value) "string"
-              (array? value) "array"
-              (table? value) "table"
-              (tuple? value) "tuple"
-              (buffer? value) "buffer"
-              (keyword? value) "keyword"
-              (symbol? value) "symbol"
-              (boolean? value) "boolean"
-              (nil? value) "nil"
-              "value"))
-          (array/push exports @{:name name-str :type type-str :doc doc-str}))))
+          # Skip re-exported symbols by checking source-map
+          (def sm (get meta :source-map))
+          (when (or (nil? sm)
+                    (string/has-suffix? mod-suffix (get sm 0)))
+            (def doc-str (get meta :doc))
+            (def value (or (get meta :value) (get meta :ref)))
+            (def type-str
+              (cond
+                (get meta :macro) "macro"
+                (function? value) "function"
+                (cfunction? value) "cfunction"
+                (fiber? value) "fiber"
+                (number? value) "number"
+                (string? value) "string"
+                (array? value) "array"
+                (table? value) "table"
+                (tuple? value) "tuple"
+                (buffer? value) "buffer"
+                (keyword? value) "keyword"
+                (symbol? value) "symbol"
+                (boolean? value) "boolean"
+                (nil? value) "nil"
+                "value"))
+            (array/push exports @{:name name-str :type type-str :doc doc-str})))))
     ([err]
       (array/push exports @{:name "(error loading module)" :type "error" :doc (string err)})))
 
