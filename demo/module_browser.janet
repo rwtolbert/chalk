@@ -35,6 +35,30 @@
 
 # --- Module Discovery ---
 
+(defn- scan-dir-recursive
+  "Recursively find .janet files under dir, returning module names relative to dir."
+  [dir prefix]
+  (def modules @[])
+  (try
+    (do
+      (def entries (os/dir dir))
+      (each f (sort entries)
+        (when (not (string/has-prefix? "." f))
+          (def full (string dir "/" f))
+          (def mode (os/stat full :mode))
+          (cond
+            (and (= mode :file)
+                 (string/has-suffix? ".janet" f)
+                 (not (string/has-suffix? ".meta.janet" f)))
+            (do
+              (def mod-name (string prefix (string/slice f 0 (- (length f) 6))))
+              (array/push modules mod-name))
+
+            (= mode :directory)
+            (array/concat modules (scan-dir-recursive full (string prefix f "/")))))))
+    ([_] nil))
+  modules)
+
 (defn- scan-packages
   "Scan syspath for installed packages and their modules."
   []
@@ -53,17 +77,7 @@
                      (not (find |(= entry $) ["bin" "man" "lib" "_bundle" ".cache"])))
             (def full-path (string syspath "/" entry))
             (when (= :directory (os/stat full-path :mode))
-              (def modules @[])
-              (try
-                (do
-                  (def files (os/dir full-path))
-                  (each f (sort files)
-                    (when (and (string/has-suffix? ".janet" f)
-                               (not (string/has-suffix? ".meta.janet" f))
-                               (not (string/has-prefix? "." f)))
-                      (def mod-name (string/slice f 0 (- (length f) 6)))
-                      (array/push modules mod-name))))
-                ([_] nil))
+              (def modules (scan-dir-recursive full-path ""))
               (when (> (length modules) 0)
                 (put seen entry true)
                 (array/push results @{:name entry
@@ -141,7 +155,7 @@
 (defn- rebuild-tree
   "Flatten packages into display items + metadata map.
    Returns [tree-items tree-map].
-   Filter matches against package names, module names, AND export names."
+   Filter matches against export names within modules."
   [packages search-text exports-cache]
   (def items @[])
   (def tmap @[])
@@ -151,25 +165,18 @@
 
   (each pkg packages
     (def pkg-name (pkg :name))
-    (def pkg-lower (string/ascii-lower pkg-name))
 
-    (var pkg-name-matches (if filter-text
-                            (not (nil? (string/find filter-text pkg-lower)))
-                            true))
     (var has-matching-module false)
     (def matching-modules @[])
 
     (each mod-name (pkg :modules)
-      (def mod-lower (string/ascii-lower mod-name))
       (if filter-text
-        (when (or (not (nil? (string/find filter-text mod-lower)))
-                  (not (nil? (string/find filter-text pkg-lower)))
-                  (module-exports-match? pkg-name mod-name filter-text exports-cache))
+        (when (module-exports-match? pkg-name mod-name filter-text exports-cache)
           (set has-matching-module true)
           (array/push matching-modules mod-name))
         (array/push matching-modules mod-name)))
 
-    (when (or pkg-name-matches has-matching-module)
+    (when (or (not filter-text) has-matching-module)
       (def expanded (or (pkg :expanded) (and filter-text has-matching-module)))
       (def prefix (if expanded "v " "> "))
       (array/push items (string prefix pkg-name))
@@ -445,29 +452,39 @@
                   (set tree-items (get rebuilt 0))
                   (set tree-map (get rebuilt 1))
                   # Sync tree selection with selected-mod
-                  (if selected-mod
+                  # Find current module's index in the new tree
+                  (var found-idx nil)
+                  (when selected-mod
+                    (for i 0 (length tree-map)
+                      (def entry (get tree-map i))
+                      (when (and (not found-idx)
+                                 (= (entry :type) :module)
+                                 (= (string (entry :pkg-name) "/" (entry :name)) selected-mod))
+                        (set found-idx i))))
+                  (if found-idx
                     (do
-                      # Find selected-mod's index in the new tree
-                      (var found-idx nil)
+                      # Current module still visible — keep it selected
+                      (set tree-sel-override found-idx)
+                      (def [pkg-name mod-name] (string/split "/" selected-mod 0 2))
+                      (def exports (load-module-exports pkg-name mod-name exports-cache))
+                      (set detail-items (build-detail-items exports search-text)))
+                    (do
+                      # Current module gone or none selected — auto-select first module
+                      (var first-mod-idx nil)
                       (for i 0 (length tree-map)
-                        (def entry (get tree-map i))
-                        (when (and (not found-idx)
-                                   (= (entry :type) :module)
-                                   (= (string (entry :pkg-name) "/" (entry :name)) selected-mod))
-                          (set found-idx i)))
-                      (if found-idx
+                        (when (and (not first-mod-idx)
+                                   (= ((get tree-map i) :type) :module))
+                          (set first-mod-idx i)))
+                      (if first-mod-idx
                         (do
-                          # Module still visible — keep it selected, filter its exports
-                          (set tree-sel-override found-idx)
-                          (def [pkg-name mod-name] (string/split "/" selected-mod 0 2))
-                          (def exports (load-module-exports pkg-name mod-name exports-cache))
+                          (def entry (get tree-map first-mod-idx))
+                          (set selected-mod (string (entry :pkg-name) "/" (entry :name)))
+                          (set tree-sel-override first-mod-idx)
+                          (def exports (load-module-exports (entry :pkg-name) (entry :name) exports-cache))
                           (set detail-items (build-detail-items exports search-text)))
                         (do
-                          # Module gone — clear detail, let cursor land naturally
                           (set selected-mod nil)
-                          (set detail-items @["Select a module to view exports"]))))
-                    # No module selected
-                    nil)
+                          (set detail-items @["No matching exports"])))))
                   (when result (set needs-redraw true))))))
 
           :resize
