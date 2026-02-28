@@ -22,10 +22,10 @@
     nil))
 
 (defn list-widget
-  "Create a scrollable list widget.
+  ``Create a scrollable list widget.
    items: array of strings
    selected: initial selected index (default 0)
-   on-select: callback (fn [index item]) called on enter"
+   on-select: callback (fn [index item]) called on enter``
   [&named items selected on-select id classes style
    width height flex-grow flex-shrink margin padding dock]
   (default items @[])

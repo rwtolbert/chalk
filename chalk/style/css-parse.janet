@@ -73,12 +73,12 @@
   result)
 
 (defn- parse-selector [raw]
-  # raw is [segment1 segment2 ...] — segments are descendant-combined
+  # raw is [segment1 segment2 ...]  - segments are descendant-combined
   (map parse-segment raw))
 
 (defn parse-css
-  "Parse a CSS string into an array of rules.
-   Each rule: {:selectors [...] :declarations [...]}"
+  ``Parse a CSS string into an array of rules.
+   Each rule: {:selectors [...] :declarations [...]}``
   [css-text]
   (def matches (peg/match css-grammar css-text))
   (unless matches (break @[]))

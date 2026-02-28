@@ -191,6 +191,34 @@
 
 # --- Detail Formatting ---
 
+(defn- wrap-line
+  "Word-wrap a line to fit within max-width columns. Returns array of lines."
+  [text max-width]
+  (if (<= (length text) max-width)
+    @[text]
+    (do
+      (def lines @[])
+      (var remaining text)
+      (while (> (length remaining) max-width)
+        # Find last space within max-width
+        (var break-at nil)
+        (for i 0 max-width
+          (when (= (get remaining i) (chr " "))
+            (set break-at i)))
+        (if break-at
+          (do
+            (array/push lines (string/slice remaining 0 break-at))
+            (set remaining (string/slice remaining (+ break-at 1))))
+          (do
+            # No space found — hard break
+            (array/push lines (string/slice remaining 0 max-width))
+            (set remaining (string/slice remaining max-width)))))
+      (when (> (length remaining) 0)
+        (array/push lines remaining))
+      lines)))
+
+(var detail-wrap-width 60)
+
 (defn- build-detail-items
   "Format exports into display strings for the detail list.
    When filter-text is non-empty, only shows exports whose name matches."
@@ -198,6 +226,7 @@
   (def ft (if (and filter-text (> (length filter-text) 0))
             (string/ascii-lower filter-text)
             nil))
+  (def wrap-width detail-wrap-width)
   (def items @[])
   (each exp exports
     (when (or (nil? ft)
@@ -205,10 +234,10 @@
       (array/push items (string (exp :name) " [" (exp :type) "]"))
       (when (exp :doc)
         (def doc-lines (string/split "\n" (exp :doc)))
-        (for i 0 (min (length doc-lines) 3)
-          (def line (get doc-lines i))
-          (when (> (length line) 0)
-            (array/push items (string "  " line)))))
+        (each line doc-lines
+          (def wrapped (wrap-line (string "  " line) wrap-width))
+          (each wl wrapped
+            (array/push items wl))))
       (array/push items "")))
   (if (= (length items) 0)
     @[(if ft "(no matching exports)" "(no exports)")]
@@ -221,6 +250,8 @@
   (var current-cols cols)
   (var current-rows rows)
   (var quit false)
+  # Detail panel width: total cols minus tree (32) minus borders (4) minus list padding (2)
+  (set detail-wrap-width (max 20 (- cols 38)))
 
   # App state
   (def packages (scan-packages))
@@ -491,6 +522,7 @@
           (do
             (set current-cols (event :cols))
             (set current-rows (event :rows))
+            (set detail-wrap-width (max 20 (- current-cols 38)))
             (set scr (screen/make-screen current-cols current-rows))
             (screen/screen-force-redraw scr)
             (set needs-redraw true))))

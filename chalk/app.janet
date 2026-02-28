@@ -1,4 +1,4 @@
-# Layer 10: App framework — defapp macro + run function
+# Layer 10: App framework  - defapp macro + run function
 # defapp is defwidget plus :css-text. run handles full lifecycle.
 
 (import ./platform/init :as platform)
@@ -11,9 +11,9 @@
 (import ./style/cascade)
 
 (defn run
-  "Run a chalk app. app-constructor is a function returning a root widget.
+  ``Run a chalk app. app-constructor is a function returning a root widget.
    The widget may have a :css-text key for CSS styling.
-   Handles: raw mode, alt screen, mount, CSS, event loop, cleanup."
+   Handles: raw mode, alt screen, mount, CSS, event loop, cleanup.``
   [app-constructor]
   (def [cols rows] (platform/get-terminal-size))
   (var current-cols cols)

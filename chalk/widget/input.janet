@@ -22,11 +22,11 @@
     nil))
 
 (defn input-widget
-  "Create a text input widget.
+  ``Create a text input widget.
    value: initial text
    placeholder: shown when empty
    on-change: callback (fn [value])
-   on-submit: callback (fn [value]) called on enter"
+   on-submit: callback (fn [value]) called on enter``
   [&named value placeholder on-change on-submit id classes style
    width height flex-grow flex-shrink margin padding dock]
   (default value "")

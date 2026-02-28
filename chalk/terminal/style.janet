@@ -1,4 +1,4 @@
-# Layer 2: Colors and text attributes — SGR code generation
+# Layer 2: Colors and text attributes  - SGR code generation
 
 # Named color map: keyword -> SGR foreground index
 (def color-fg-map
@@ -21,8 +21,8 @@
    :underline false :reverse false})
 
 (defn make-style
-  "Create a style struct. Options: :fg :bg :bold :dim :italic :underline :reverse.
-   Colors can be keywords (:red), numbers (0-255), or [r g b] tuples."
+  ``Create a style struct. Options: :fg :bg :bold :dim :italic :underline :reverse.
+   Colors can be keywords (:red), numbers (0-255), or [r g b] tuples.``
   [&named fg bg bold dim italic underline reverse]
   {:fg fg :bg bg
    :bold (or bold false)

@@ -1,4 +1,4 @@
-# Layer 4: Event loop — synchronous tty reader using raw FFI read()
+# Layer 4: Event loop  - synchronous tty reader using raw FFI read()
 # read() returns within 100ms due to VMIN=0 VTIME=1 termios settings.
 
 (import ../events/types)
@@ -16,8 +16,8 @@
   (set size-check-counter 0))
 
 (defn read-events
-  "Wait for input (up to 100ms), then return events.
-   Generates resize events when terminal size changes (checked every ~500ms)."
+  ``Wait for input (up to 100ms), then return events.
+   Generates resize events when terminal size changes (checked every ~500ms).``
   []
   (def events @[])
 

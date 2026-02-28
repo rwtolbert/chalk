@@ -62,14 +62,27 @@
     (put cell :style s)))
 
 (defn screen-put-string
-  "Write a string starting at col,row (1-based). Returns the column after the last char."
+  "Write a string starting at col,row (1-based). Returns the column after the last char.
+   Handles multi-byte UTF-8 characters correctly."
   [screen col row text &opt s]
   (def cols (screen :cols))
+  (def len (length text))
   (var c col)
-  (each byte text
+  (var i 0)
+  (while (< i len)
     (when (> c cols) (break))
-    (screen-put screen c row (string/from-bytes byte) s)
-    (++ c))
+    (def b (get text i))
+    # Determine UTF-8 byte length from leading byte
+    (def char-len
+      (cond
+        (< b 0x80) 1
+        (< b 0xE0) 2
+        (< b 0xF0) 3
+        4))
+    (def ch (string/slice text i (min (+ i char-len) len)))
+    (screen-put screen c row ch s)
+    (++ c)
+    (set i (+ i char-len)))
   c)
 
 (defn screen-clear

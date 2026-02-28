@@ -136,10 +136,10 @@
       found)))
 
 (defn dispatch-event
-  "Deliver an event to the widget tree.
+  ``Deliver an event to the widget tree.
    Mouse events hit-test rects (deepest match wins).
    Key events go to root.
-   Handlers return {:msg m} to bubble to parent's :update."
+   Handlers return {:msg m} to bubble to parent's :update.``
   [root event]
   (var target nil)
   (var result nil)

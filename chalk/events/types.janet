@@ -149,8 +149,8 @@
     [nil pos]))
 
 (defn parse-input
-  "Parse a byte buffer into a sequence of events.
-   Returns an array of event structs."
+  ``Parse a byte buffer into a sequence of events.
+   Returns an array of event structs.``
   [bytes]
   (def events @[])
   (var offset 0)

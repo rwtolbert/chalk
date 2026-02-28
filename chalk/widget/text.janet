@@ -25,8 +25,8 @@
     nil))
 
 (defn text
-  "Create a text widget. Content is a string displayed within the rect.
-   text-align: :left (default), :center, or :right"
+  ``Create a text widget. Content is a string displayed within the rect.
+   text-align: :left (default), :center, or :right``
   [content &named id classes style width height flex-grow flex-shrink
    margin padding dock text-align]
   (def lines (string/split "\n" content))

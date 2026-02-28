@@ -7,10 +7,10 @@
 (import ../terminal/style)
 
 (defn border
-  "Create a border widget wrapping one child.
+  ``Create a border widget wrapping one child.
    border-style: :single (default), :double, :rounded, :heavy, or :ascii
    title: optional string in top border
-   title-align: :left (default), :center, or :right"
+   title-align: :left (default), :center, or :right``
   [child &named id classes style border-style title title-align
    width height flex-grow flex-shrink margin padding dock]
   (default border-style :single)
@@ -26,7 +26,7 @@
                 :h "\xE2\x94\x81" :v "\xE2\x94\x83"}
       :ascii   {:tl "+" :tr "+" :bl "+" :br "+"
                 :h "-" :v "|"}
-      # :single (default) — light box drawing
+      # :single (default)  - light box drawing
       {:tl "\xE2\x94\x8C" :tr "\xE2\x94\x90" :bl "\xE2\x94\x94" :br "\xE2\x94\x98"
        :h "\xE2\x94\x80" :v "\xE2\x94\x82"}))
 
