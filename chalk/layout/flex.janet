@@ -25,9 +25,9 @@
 
   # Subtract margin for the allocation
   (def alloc-w (- (min raw-w available-width)
-                   (node :margin-left) (node :margin-right)))
+                  (node :margin-left) (node :margin-right)))
   (def alloc-h (- (min raw-h available-height)
-                   (node :margin-top) (node :margin-bottom)))
+                  (node :margin-top) (node :margin-bottom)))
 
   # Clamp
   (def node-w (box/clamp-size alloc-w (node :min-width) (node :max-width)))

@@ -23,9 +23,9 @@
   true)
 
 (defn selector-matches?
-  ``Test if a full selector (array of segments) matches a widget.
+  ```Test if a full selector (array of segments) matches a widget.
    Segments use descendant combinator: each segment must match
-   the widget or one of its ancestors, in order from right to left.``
+   the widget or one of its ancestors, in order from right to left.```
   [selector widget]
   (when (empty? selector) (break false))
 
@@ -82,8 +82,8 @@
     (put widget k v)))
 
 (defn resolve-styles
-  ``Match all rules against each widget in the tree. Sort by specificity
-   then source order, merge. Inline :style on widget overrides CSS.``
+  ```Match all rules against each widget in the tree. Sort by specificity
+   then source order, merge. Inline :style on widget overrides CSS.```
   [stylesheet root]
   (defn walk [widget]
     # Collect matching rules with specificity

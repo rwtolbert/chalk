@@ -74,7 +74,7 @@
         (when (not (get seen entry))
           # Skip hidden dirs, bin, man, .cache, bundle, etc.
           (when (and (not (string/has-prefix? "." entry))
-                     (not (find |(= entry $) ["bin" "man" "lib" "_bundle" ".cache"])))
+                     (not (find |(= entry $) ["bin" "man" "lib" "bundle" "_bundle" ".cache"])))
             (def full-path (string syspath "/" entry))
             (when (= :directory (os/stat full-path :mode))
               (def modules (scan-dir-recursive full-path ""))

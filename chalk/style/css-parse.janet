@@ -14,8 +14,7 @@
 
       # Comma-separated selectors
       :selector-list (* (group (* (constant :selectors) :selector
-                                  (any (* :opt-ws "," :opt-ws :selector))))
-                        )
+                                  (any (* :opt-ws "," :opt-ws :selector)))))
 
       # A selector: space-separated segments (descendant combinator)
       :selector (group (some (* :segment :opt-ws)))
@@ -77,8 +76,8 @@
   (map parse-segment raw))
 
 (defn parse-css
-  ``Parse a CSS string into an array of rules.
-   Each rule: {:selectors [...] :declarations [...]}``
+  ```Parse a CSS string into an array of rules.
+   Each rule: {:selectors [...] :declarations [...]}```
   [css-text]
   (def matches (peg/match css-grammar css-text))
   (unless matches (break @[]))

@@ -17,13 +17,13 @@
   widget)
 
 (defmacro defwidget
-  ``Define a widget constructor. Body forms:
+  ```Define a widget constructor. Body forms:
    (state {:key default ...})
    (render [self] ...) - return child widgets
    (on :event-type [self event] ...) - event handler
    (paint [self screen rect] ...) - custom paint
    (mount [self] ...) - mount lifecycle
-   (unmount [self] ...) - unmount lifecycle``
+   (unmount [self] ...) - unmount lifecycle```
   [name & body]
 
   # Parse body forms

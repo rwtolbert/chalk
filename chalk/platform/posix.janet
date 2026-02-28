@@ -40,10 +40,10 @@
 (def- OFF-CC 32)
 
 # Input flags (c_iflag)
-(def- ICRNL  0x100)
-(def- IXON   0x200)
+(def- ICRNL 0x100)
+(def- IXON 0x200)
 (def- BRKINT 0x02)
-(def- INPCK  0x10)
+(def- INPCK 0x10)
 (def- ISTRIP 0x20)
 
 # Output flags (c_oflag)
@@ -53,13 +53,13 @@
 (def- CS8 0x300)
 
 # Local flags (c_lflag)
-(def- ECHO   0x8)
+(def- ECHO 0x8)
 (def- ICANON 0x100)
-(def- ISIG   0x80)
+(def- ISIG 0x80)
 (def- IEXTEN 0x400)
 
 # c_cc indices
-(def- VMIN  16)
+(def- VMIN 16)
 (def- VTIME 17)
 
 # ioctl
@@ -210,8 +210,8 @@
   (> ret 0))
 
 (defn read-tty
-  ``Blocking read from a raw fd. Returns a buffer of bytes read, or nil on timeout/error.
-   Retries automatically if interrupted by a signal (EINTR).``
+  ```Blocking read from a raw fd. Returns a buffer of bytes read, or nil on timeout/error.
+   Retries automatically if interrupted by a signal (EINTR).```
   [fd nbytes]
   (def buf (buffer/new-filled nbytes 0))
   (var n -1)

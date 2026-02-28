@@ -107,7 +107,7 @@
           button (band btn-code 0x03)
           action (if (= act-ch "M")
                    (if (not= 0 (band btn-code 0x20)) :move
-                       (if (not= 0 (band btn-code 0x40)) :scroll :press))
+                     (if (not= 0 (band btn-code 0x40)) :scroll :press))
                    :release)]
       [(mouse-event button col row action) pos])
 
@@ -149,8 +149,8 @@
     [nil pos]))
 
 (defn parse-input
-  ``Parse a byte buffer into a sequence of events.
-   Returns an array of event structs.``
+  ```Parse a byte buffer into a sequence of events.
+   Returns an array of event structs.```
   [bytes]
   (def events @[])
   (var offset 0)

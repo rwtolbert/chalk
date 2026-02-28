@@ -11,9 +11,9 @@
 (import ./style/cascade)
 
 (defn run
-  ``Run a chalk app. app-constructor is a function returning a root widget.
+  ```Run a chalk app. app-constructor is a function returning a root widget.
    The widget may have a :css-text key for CSS styling.
-   Handles: raw mode, alt screen, mount, CSS, event loop, cleanup.``
+   Handles: raw mode, alt screen, mount, CSS, event loop, cleanup.```
   [app-constructor]
   (def [cols rows] (platform/get-terminal-size))
   (var current-cols cols)

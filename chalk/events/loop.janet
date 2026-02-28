@@ -16,8 +16,8 @@
   (set size-check-counter 0))
 
 (defn read-events
-  ``Wait for input (up to 100ms), then return events.
-   Generates resize events when terminal size changes (checked every ~500ms).``
+  ```Wait for input (up to 100ms), then return events.
+   Generates resize events when terminal size changes (checked every ~500ms).```
   []
   (def events @[])
 
