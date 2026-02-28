@@ -266,8 +266,6 @@
   (var current-cols cols)
   (var current-rows rows)
   (var quit false)
-  # Detail panel width: total cols minus tree (32) minus borders (4) minus list padding (2)
-  (set detail-wrap-width (max 20 (- cols 38)))
 
   # App state
   (def packages (scan-packages))
@@ -279,18 +277,38 @@
   (var focus :tree) # :tree, :detail, or :search
   (var selected-mod nil)
   (var tree-sel-override nil) # when non-nil, force tree selection to this index on next redraw
+  (var tree-panel-width 32)
 
   # Initial tree build
   (def initial (rebuild-tree packages search-text exports-cache))
   (set tree-items (get initial 0))
   (set tree-map (get initial 1))
 
+  (defn compute-tree-width []
+    # Auto-widen from longest item + 2 (list padding) + 2 (border), capped at 40% of screen
+    (var longest 10)
+    (each item tree-items
+      (when (> (length item) longest)
+        (set longest (length item))))
+    (def max-width (math/floor (* current-cols 0.4)))
+    (min (+ longest 4) max-width))
+
+  (defn truncate-item [item max-len]
+    (if (> (length item) max-len)
+      (string (string/slice item 0 (- max-len 3)) "...")
+      item))
+
   (defn build-ui []
+    (set tree-panel-width (compute-tree-width))
+    (set detail-wrap-width (max 20 (- current-cols tree-panel-width 6)))
+    (def inner-width (- tree-panel-width 4))
+    (def display-items (map |(truncate-item $ inner-width) tree-items))
+
     (def tree-list (list/list-widget
                      :id "tree-list"
-                     :items tree-items
+                     :items display-items
                      :style {:fg :white}
-                     :width 30))
+                     :width (- tree-panel-width 2)))
 
     (def detail-list (list/list-widget
                        :id "detail-list"
@@ -342,7 +360,7 @@
                 tree-list
                 :id "tree-panel"
                 :border-style :rounded
-                :width 32
+                :width tree-panel-width
                 :title (if (= focus :tree) " Packages (active) " " Packages ")
                 :style (if (= focus :tree) {:fg :cyan} {:fg :white}))
 
@@ -538,7 +556,6 @@
           (do
             (set current-cols (event :cols))
             (set current-rows (event :rows))
-            (set detail-wrap-width (max 20 (- current-cols 38)))
             (set scr (screen/make-screen current-cols current-rows))
             (screen/screen-force-redraw scr)
             (set needs-redraw true))))
