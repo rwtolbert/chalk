@@ -1,11 +1,11 @@
 # Demo: Interactive hello world exercising all 5 layers
 # Run from project root: janet demo/hello.janet
 
-(import ../src/platform/init :as platform)
-(import ../src/terminal/output :as output)
-(import ../src/terminal/style :as style)
-(import ../src/terminal/screen :as screen)
-(import ../src/events/loop :as loop)
+(import ../chalk/platform/init :as platform)
+(import ../chalk/terminal/output :as output)
+(import ../chalk/terminal/style :as style)
+(import ../chalk/terminal/screen :as screen)
+(import ../chalk/events/loop :as loop)
 
 (defn- draw-title-bar [scr cols text]
   (def bar-style (style/make-style :fg :white :bg :blue :bold true))

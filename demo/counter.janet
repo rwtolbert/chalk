@@ -1,16 +1,16 @@
 # Layer 9 Demo: Counter widget using defwidget
 # Press +/= to increment, -/_ to decrement, q or ctrl-c to quit.
 
-(import ../src/platform/init :as platform)
-(import ../src/terminal/output :as output)
-(import ../src/terminal/screen :as screen)
-(import ../src/terminal/style :as style)
-(import ../src/events/loop :as loop)
-(import ../src/widget/proto)
-(import ../src/widget/text)
-(import ../src/widget/container)
-(import ../src/widget/render)
-(import ../src/widget/defwidget :as dw)
+(import ../chalk/platform/init :as platform)
+(import ../chalk/terminal/output :as output)
+(import ../chalk/terminal/screen :as screen)
+(import ../chalk/terminal/style :as style)
+(import ../chalk/events/loop :as loop)
+(import ../chalk/widget/proto)
+(import ../chalk/widget/text)
+(import ../chalk/widget/container)
+(import ../chalk/widget/render)
+(import ../chalk/widget/defwidget :as dw)
 
 (defn build-counter-ui [count]
   "Build widget tree reflecting the current count."

@@ -17,9 +17,9 @@
       (break false)))
   # Check classes
   (when-let [classes (segment :classes)]
-    (each cls classes
-      (unless (find |(= $ cls) (or (widget :classes) @[]))
-        (break false))))
+    (def widget-classes (or (widget :classes) @[]))
+    (unless (all (fn [cls] (find |(= $ cls) widget-classes)) classes)
+      (break false)))
   true)
 
 (defn selector-matches?

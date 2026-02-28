@@ -5,4 +5,4 @@
   :description (info :description))
 
 (declare-source
-  :source @["src"])
+  :source @["chalk"])

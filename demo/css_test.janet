@@ -1,15 +1,15 @@
 # Layer 8 Demo: Same layout as widgets_test but styled via CSS
 # Press q or ctrl-c to quit.
 
-(import ../src/platform/init :as platform)
-(import ../src/terminal/output :as output)
-(import ../src/terminal/screen :as screen)
-(import ../src/events/loop :as loop)
-(import ../src/widget/proto)
-(import ../src/widget/text)
-(import ../src/widget/container)
-(import ../src/widget/render)
-(import ../src/style/cascade)
+(import ../chalk/platform/init :as platform)
+(import ../chalk/terminal/output :as output)
+(import ../chalk/terminal/screen :as screen)
+(import ../chalk/events/loop :as loop)
+(import ../chalk/widget/proto)
+(import ../chalk/widget/text)
+(import ../chalk/widget/container)
+(import ../chalk/widget/render)
+(import ../chalk/style/cascade)
 
 (def app-css `
   #title-bar {

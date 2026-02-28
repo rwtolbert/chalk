@@ -3,13 +3,13 @@
 # runs layout, paints colored rects to screen buffer.
 # Press q or ctrl-c to quit.
 
-(import ../src/platform/init :as platform)
-(import ../src/terminal/output :as output)
-(import ../src/terminal/style :as style)
-(import ../src/terminal/screen :as screen)
-(import ../src/events/loop :as loop)
-(import ../src/layout/box)
-(import ../src/layout/flex)
+(import ../chalk/platform/init :as platform)
+(import ../chalk/terminal/output :as output)
+(import ../chalk/terminal/style :as style)
+(import ../chalk/terminal/screen :as screen)
+(import ../chalk/events/loop :as loop)
+(import ../chalk/layout/box)
+(import ../chalk/layout/flex)
 
 (defn- fill-rect [scr rect s]
   "Fill a rect with spaces in the given style."

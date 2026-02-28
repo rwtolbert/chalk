@@ -1,19 +1,19 @@
 # Layer 10 Demo: Full todo-list app with CSS, borders, list, input
 # ctrl-c to quit, tab to switch focus, enter to add/toggle, d to delete
 
-(import ../src/platform/init :as platform)
-(import ../src/terminal/output :as output)
-(import ../src/terminal/screen :as screen)
-(import ../src/terminal/style :as style)
-(import ../src/events/loop :as loop)
-(import ../src/widget/proto)
-(import ../src/widget/text)
-(import ../src/widget/container)
-(import ../src/widget/border)
-(import ../src/widget/list)
-(import ../src/widget/input)
-(import ../src/widget/render)
-(import ../src/style/cascade)
+(import ../chalk/platform/init :as platform)
+(import ../chalk/terminal/output :as output)
+(import ../chalk/terminal/screen :as screen)
+(import ../chalk/terminal/style :as style)
+(import ../chalk/events/loop :as loop)
+(import ../chalk/widget/proto)
+(import ../chalk/widget/text)
+(import ../chalk/widget/container)
+(import ../chalk/widget/border)
+(import ../chalk/widget/list)
+(import ../chalk/widget/input)
+(import ../chalk/widget/render)
+(import ../chalk/style/cascade)
 
 (def app-css `
   #header {
