@@ -434,37 +434,41 @@
 
               # Search focus
               (= focus :search)
-              (do
-                (def result ((search-input :handle-event) search-input event))
-                (set search-text (get-in search-input [:state :value] ""))
-                (def rebuilt (rebuild-tree packages search-text exports-cache))
-                (set tree-items (get rebuilt 0))
-                (set tree-map (get rebuilt 1))
-                # Sync tree selection with selected-mod
-                (if selected-mod
-                  (do
-                    # Find selected-mod's index in the new tree
-                    (var found-idx nil)
-                    (for i 0 (length tree-map)
-                      (def entry (get tree-map i))
-                      (when (and (not found-idx)
-                                 (= (entry :type) :module)
-                                 (= (string (entry :pkg-name) "/" (entry :name)) selected-mod))
-                        (set found-idx i)))
-                    (if found-idx
-                      (do
-                        # Module still visible — keep it selected, filter its exports
-                        (set tree-sel-override found-idx)
-                        (def [pkg-name mod-name] (string/split "/" selected-mod 0 2))
-                        (def exports (load-module-exports pkg-name mod-name exports-cache))
-                        (set detail-items (build-detail-items exports search-text)))
-                      (do
-                        # Module gone — clear detail, let cursor land naturally
-                        (set selected-mod nil)
-                        (set detail-items @["Select a module to view exports"]))))
-                  # No module selected — check if cursor lands on one
-                  nil)
-                (when result (set needs-redraw true)))))
+              (if (= k :enter)
+                (do
+                  (set focus :tree)
+                  (set needs-redraw true))
+                (do
+                  (def result ((search-input :handle-event) search-input event))
+                  (set search-text (get-in search-input [:state :value] ""))
+                  (def rebuilt (rebuild-tree packages search-text exports-cache))
+                  (set tree-items (get rebuilt 0))
+                  (set tree-map (get rebuilt 1))
+                  # Sync tree selection with selected-mod
+                  (if selected-mod
+                    (do
+                      # Find selected-mod's index in the new tree
+                      (var found-idx nil)
+                      (for i 0 (length tree-map)
+                        (def entry (get tree-map i))
+                        (when (and (not found-idx)
+                                   (= (entry :type) :module)
+                                   (= (string (entry :pkg-name) "/" (entry :name)) selected-mod))
+                          (set found-idx i)))
+                      (if found-idx
+                        (do
+                          # Module still visible — keep it selected, filter its exports
+                          (set tree-sel-override found-idx)
+                          (def [pkg-name mod-name] (string/split "/" selected-mod 0 2))
+                          (def exports (load-module-exports pkg-name mod-name exports-cache))
+                          (set detail-items (build-detail-items exports search-text)))
+                        (do
+                          # Module gone — clear detail, let cursor land naturally
+                          (set selected-mod nil)
+                          (set detail-items @["Select a module to view exports"]))))
+                    # No module selected
+                    nil)
+                  (when result (set needs-redraw true))))))
 
           :resize
           (do
