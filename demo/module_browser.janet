@@ -35,8 +35,13 @@
 
 # --- Module Discovery ---
 
+# Detect native module extension for this platform (.so, .dll, etc.)
+(def native-ext
+  (let [expanded (module/expand-path "_" ":all::native:")]
+    (string/slice expanded (+ (string/find "." expanded)))))
+
 (defn- scan-dir-recursive
-  "Recursively find .janet files under dir, returning module names relative to dir."
+  "Recursively find .janet and native modules under dir."
   [dir prefix]
   (def modules @[])
   (try
@@ -52,6 +57,12 @@
                  (not (string/has-suffix? ".meta.janet" f)))
             (do
               (def mod-name (string prefix (string/slice f 0 (- (length f) 6))))
+              (array/push modules mod-name))
+
+            (and (= mode :file)
+                 (string/has-suffix? native-ext f))
+            (do
+              (def mod-name (string prefix (string/slice f 0 (- (length f) (length native-ext)))))
               (array/push modules mod-name))
 
             (= mode :directory)
@@ -105,12 +116,17 @@
         # Skip private symbols (starting with _) and module metadata
         (when (and (not (string/has-prefix? "_" name-str))
                    (not (string/has-prefix? ":" name-str))
-                   (not (find |(= name-str $) ["*module*" "*should-not-redef*"])))
+                   (not (find |(= name-str $) ["*module*" "*should-not-redef*" "native"])))
           (def meta (if (table? v) v @{}))
           # Skip re-exported symbols by checking source-map
+          # Native (C) modules have source-maps pointing to .c files
           (def sm (get meta :source-map))
+          (def sm-file (when sm (get sm 0)))
           (when (or (nil? sm)
-                    (string/has-suffix? mod-suffix (get sm 0)))
+                    (string/has-suffix? mod-suffix sm-file)
+                    (string/has-suffix? ".c" sm-file)
+                    (string/has-suffix? ".cpp" sm-file)
+                    (string/has-suffix? ".h" sm-file))
             (def doc-str (get meta :doc))
             (def value (or (get meta :value) (get meta :ref)))
             (def type-str
