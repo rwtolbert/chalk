@@ -25,10 +25,12 @@
     nil))
 
 (defn text
-  "Create a text widget. Content is a string displayed within the rect."
+  "Create a text widget. Content is a string displayed within the rect.
+   text-align: :left (default), :center, or :right"
   [content &named id classes style width height flex-grow flex-shrink
-   margin padding dock]
+   margin padding dock text-align]
   (def lines (string/split "\n" content))
+  (default text-align :left)
 
   (proto/make-widget
     "text"
@@ -59,7 +61,13 @@
         (def row (+ (rect :row) i))
         (when (>= row max-row) (break))
         (def line (get lines i))
-        (var col (rect :col))
+        (def line-len (length line))
+        (def col-start
+          (case text-align
+            :center (+ (rect :col) (math/floor (/ (- (rect :width) line-len) 2)))
+            :right (+ (rect :col) (- (rect :width) line-len))
+            (rect :col)))
+        (var col (max col-start (rect :col)))
         (each byte line
           (when (>= col max-col) (break))
           (screen/screen-put scr col row (string/from-bytes byte) s)

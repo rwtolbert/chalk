@@ -259,7 +259,7 @@
           (container/container
             :id "header"
             :children
-            @[(text/text " Janet Module Browser " :flex-grow 1)])
+            @[(text/text "Janet Module Browser" :text-align :center :flex-grow 1)])
 
           # Footer
           (container/container
@@ -280,6 +280,7 @@
               (border/border
                 tree-list
                 :id "tree-panel"
+                :border-style :rounded
                 :width 32
                 :title (if (= focus :tree) " Packages (active) " " Packages ")
                 :style (if (= focus :tree) {:fg :cyan} {:fg :white}))
@@ -288,6 +289,7 @@
               (border/border
                 detail-list
                 :id "detail-panel"
+                :border-style :rounded
                 :flex-grow 1
                 :title (if (= focus :detail)
                          (string detail-title "(active) ")
