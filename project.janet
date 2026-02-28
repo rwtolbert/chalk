@@ -1,4 +1,8 @@
+(def info (-> (slurp "./bundle/info.jdn") parse))
+
 (declare-project
-  :name "chalk"
-  :description "A pure Janet TUI library inspired by Python's Textual"
-  :dependencies [])
+  :name (info :name)
+  :description (info :description))
+
+(declare-source
+  :source @["src"])

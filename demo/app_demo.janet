@@ -62,7 +62,7 @@
                @{:text "Write demo apps" :done false}
                @{:text "Take over the world" :done false}])
   (var input-value "")
-  (var focus :list)  # :list or :input
+  (var focus :list) # :list or :input
 
   (defn build-ui []
     (def todo-strings (map format-todo todos))
@@ -139,7 +139,7 @@
                   (text/text "In todo list:")
                   (text/text " up/k   move up")
                   (text/text " down/j move down")
-                  (text/text " enter  toggle done")
+                  (text/text " space  toggle done")
                   (text/text " d      delete todo")
                   (text/text "")
                   (text/text "In input:")
@@ -212,7 +212,7 @@
               (do
                 (cond
                   # Toggle done
-                  (= k :enter)
+                  (= k " ")
                   (do
                     (def sel (get-in todo-list [:state :selected]))
                     (when (and sel (< sel (length todos)))

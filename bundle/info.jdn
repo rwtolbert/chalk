@@ -1,0 +1,7 @@
+@{:name "chalk"
+  :description "A pure Janet TUI library inspired by Python's Textual"
+  :author "Bob Tolbert"
+  :license "MIT"
+  :dependencies []
+  :url "https://github.com/rwtolbert/chalk"
+  :repo "git+https://github.com/rwtolbert/chalk"}
