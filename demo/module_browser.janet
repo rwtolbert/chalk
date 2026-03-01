@@ -13,6 +13,7 @@
 (import ../chalk/widget/border)
 (import ../chalk/widget/list)
 (import ../chalk/widget/input)
+(import ../chalk/widget/checkbox)
 (import ../chalk/widget/render)
 (import ../chalk/style/cascade)
 
@@ -99,8 +100,9 @@
 
 (defn- load-module-exports
   "Load a module's exports via require. Returns sorted array of export info."
-  [pkg-name mod-name cache]
-  (def cache-key (string pkg-name "/" mod-name))
+  [pkg-name mod-name cache &opt show-private]
+  (default show-private false)
+  (def cache-key (string pkg-name "/" mod-name (if show-private "/+private" "")))
   (when (get cache cache-key)
     (break (get cache cache-key)))
 
@@ -118,7 +120,7 @@
         (when (and (not (string/has-prefix? "_" name-str))
                    (not (string/has-prefix? ":" name-str))
                    (not (find |(= name-str $) ["*module*" "*should-not-redef*" "native" "current-file" "source"]))
-                   (not (get meta :private)))
+                   (or show-private (not (get meta :private))))
           # Skip re-exported symbols by checking source-map
           # Native (C) modules have source-maps pointing to .c files
           (def sm (get meta :source-map))
@@ -160,8 +162,8 @@
 (defn- module-exports-match?
   "Check if any export in a module matches the filter text.
    Loads exports lazily via cache."
-  [pkg-name mod-name filter-text exports-cache]
-  (def exports (load-module-exports pkg-name mod-name exports-cache))
+  [pkg-name mod-name filter-text exports-cache &opt show-private]
+  (def exports (load-module-exports pkg-name mod-name exports-cache show-private))
   (var found false)
   (each exp exports
     (when (and (not found)
@@ -173,7 +175,7 @@
   "Flatten packages into display items + metadata map.
    Returns [tree-items tree-map].
    Filter matches against export names within modules."
-  [packages search-text exports-cache]
+  [packages search-text exports-cache &opt show-private]
   (def items @[])
   (def tmap @[])
   (def filter-text (if (and search-text (> (length search-text) 0))
@@ -188,7 +190,7 @@
 
     (each mod-name (pkg :modules)
       (if filter-text
-        (when (module-exports-match? pkg-name mod-name filter-text exports-cache)
+        (when (module-exports-match? pkg-name mod-name filter-text exports-cache show-private)
           (set has-matching-module true)
           (array/push matching-modules mod-name))
         (array/push matching-modules mod-name)))
@@ -296,13 +298,14 @@
   (var detail-items @["Select a module to view exports"])
   (var detail-styles @[nil])
   (var search-text "")
-  (var focus :tree) # :tree, :detail, or :search
+  (var show-private false)
+  (var focus :tree) # :tree, :detail, :search, or :checkbox
   (var selected-mod nil)
   (var tree-sel-override nil) # when non-nil, force tree selection to this index on next redraw
   (var tree-panel-width 32)
 
   # Initial tree build
-  (def initial (rebuild-tree packages search-text exports-cache))
+  (def initial (rebuild-tree packages search-text exports-cache show-private))
   (set tree-items (get initial 0))
   (set tree-map (get initial 1))
 
@@ -347,6 +350,16 @@
                         :flex-grow 1
                         :height 1))
 
+    (def private-checkbox (checkbox/checkbox-widget
+                            :id "private-checkbox"
+                            :checked show-private
+                            :label "private"
+                            :checkbox-style :square
+                            :style (if (= focus :checkbox)
+                                     {:fg :cyan}
+                                     {:fg :white})
+                            :height 1))
+
     (def detail-title
       (if selected-mod
         (string " " selected-mod " ")
@@ -370,6 +383,8 @@
             :children
             @[(text/text " /: search " :width 12)
               search-input
+              (text/text " " :width 1)
+              private-checkbox
               (text/text " esc: clear | ctrl-c: quit " :width 28)])
 
           # Main area
@@ -399,7 +414,7 @@
                 :style (if (= focus :detail) {:fg :cyan} {:fg :white}))])]))
 
     (cascade/apply-stylesheet app-css root)
-    [root tree-list detail-list search-input])
+    [root tree-list detail-list search-input private-checkbox])
 
   (platform/enter-raw-mode)
   (defer (do
@@ -425,6 +440,7 @@
     (var tree-list (get ui-parts 1))
     (var detail-list (get ui-parts 2))
     (var search-input (get ui-parts 3))
+    (var private-cb (get ui-parts 4))
     (proto/mount-tree root)
     (render/render-tree scr root current-cols current-rows)
 
@@ -447,16 +463,18 @@
                 (set focus (case focus
                              :tree :detail
                              :detail :search
-                             :search :tree))
+                             :search :checkbox
+                             :checkbox :tree))
                 (set needs-redraw true))
 
               # Shift-tab: cycle focus backward
               (= k :shift-tab)
               (do
                 (set focus (case focus
-                             :tree :search
+                             :tree :checkbox
                              :detail :tree
-                             :search :detail))
+                             :search :detail
+                             :checkbox :search))
                 (set needs-redraw true))
 
               # Slash: jump to search (unless already in search)
@@ -470,13 +488,13 @@
               (do
                 (set search-text "")
                 (set focus :tree)
-                (def rebuilt (rebuild-tree packages search-text exports-cache))
+                (def rebuilt (rebuild-tree packages search-text exports-cache show-private))
                 (set tree-items (get rebuilt 0))
                 (set tree-map (get rebuilt 1))
                 # Clear filter from detail panel
                 (when selected-mod
                   (def [pkg-name mod-name] (string/split "/" selected-mod 0 2))
-                  (def exports (load-module-exports pkg-name mod-name exports-cache))
+                  (def exports (load-module-exports pkg-name mod-name exports-cache show-private))
                   (let [[di ds] (build-detail-items exports)]
                     (set detail-items di)
                     (set detail-styles ds)))
@@ -497,14 +515,14 @@
                         (do
                           (def pkg (entry :pkg))
                           (put pkg :expanded (not (pkg :expanded)))
-                          (def rebuilt (rebuild-tree packages search-text exports-cache))
+                          (def rebuilt (rebuild-tree packages search-text exports-cache show-private))
                           (set tree-items (get rebuilt 0))
                           (set tree-map (get rebuilt 1))
                           (set needs-redraw true))
 
                         :module
                         (do
-                          (def exports (load-module-exports (entry :pkg-name) (entry :name) exports-cache))
+                          (def exports (load-module-exports (entry :pkg-name) (entry :name) exports-cache show-private))
                           (let [[di ds] (build-detail-items exports search-text)]
                             (set detail-items di)
                             (set detail-styles ds))
@@ -520,7 +538,7 @@
                     (when (< sel (length tree-map))
                       (def entry (get tree-map sel))
                       (when (= (entry :type) :module)
-                        (def exports (load-module-exports (entry :pkg-name) (entry :name) exports-cache))
+                        (def exports (load-module-exports (entry :pkg-name) (entry :name) exports-cache show-private))
                         (let [[di ds] (build-detail-items exports search-text)]
                           (set detail-items di)
                           (set detail-styles ds))
@@ -533,6 +551,23 @@
                 (def result ((detail-list :handle-event) detail-list event))
                 (when result (set needs-redraw true)))
 
+              # Checkbox focus
+              (= focus :checkbox)
+              (do
+                (when (or (= k " ") (= k :enter))
+                  (set show-private (not show-private))
+                  # Invalidate exports cache
+                  (each ck (keys exports-cache)
+                    (put exports-cache ck nil))
+                  # Reload detail panel if a module is selected
+                  (when selected-mod
+                    (def [pkg-name mod-name] (string/split "/" selected-mod 0 2))
+                    (def exports (load-module-exports pkg-name mod-name exports-cache show-private))
+                    (let [[di ds] (build-detail-items exports search-text)]
+                      (set detail-items di)
+                      (set detail-styles ds)))
+                  (set needs-redraw true)))
+
               # Search focus
               (= focus :search)
               (if (= k :enter)
@@ -542,7 +577,7 @@
                 (do
                   (def result ((search-input :handle-event) search-input event))
                   (set search-text (get-in search-input [:state :value] ""))
-                  (def rebuilt (rebuild-tree packages search-text exports-cache))
+                  (def rebuilt (rebuild-tree packages search-text exports-cache show-private))
                   (set tree-items (get rebuilt 0))
                   (set tree-map (get rebuilt 1))
                   # Sync tree selection with selected-mod
@@ -560,7 +595,7 @@
                       # Current module still visible -- keep it selected
                       (set tree-sel-override found-idx)
                       (def [pkg-name mod-name] (string/split "/" selected-mod 0 2))
-                      (def exports (load-module-exports pkg-name mod-name exports-cache))
+                      (def exports (load-module-exports pkg-name mod-name exports-cache show-private))
                       (let [[di ds] (build-detail-items exports search-text)]
                         (set detail-items di)
                         (set detail-styles ds)))
@@ -576,7 +611,7 @@
                           (def entry (get tree-map first-mod-idx))
                           (set selected-mod (string (entry :pkg-name) "/" (entry :name)))
                           (set tree-sel-override first-mod-idx)
-                          (def exports (load-module-exports (entry :pkg-name) (entry :name) exports-cache))
+                          (def exports (load-module-exports (entry :pkg-name) (entry :name) exports-cache show-private))
                           (let [[di ds] (build-detail-items exports search-text)]
                             (set detail-items di)
                             (set detail-styles ds)))
@@ -605,6 +640,7 @@
         (set tree-list (get new-ui 1))
         (set detail-list (get new-ui 2))
         (set search-input (get new-ui 3))
+        (set private-cb (get new-ui 4))
 
         # Restore selections -- use override if set, otherwise preserve old index
         (def tree-sel
