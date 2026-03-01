@@ -6,3 +6,8 @@
 
 (declare-source
   :source @["chalk"])
+
+(declare-binscript
+  :main "demo/bundle_browser.janet"
+  :hardcode-syspath true
+  :is-janet true)

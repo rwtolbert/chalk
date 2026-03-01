@@ -1,25 +1,25 @@
 # ================================================================
-# Module Browser - A chalk demo application
+# Bundle Browser - A chalk demo application
 # ================================================================
-# Browse installed Janet packages, modules, and their exports.
+# Browse installed Janet bundles, modules, and their exports.
 #
 # Keybindings:
 #   ctrl-c            quit
 #   tab / shift-tab   cycle focus (tree -> detail -> search -> checkbox)
-#   enter / space     expand package or select module
+#   enter / space     expand bundle or select module
 #   /                 jump to search input
 #   escape            clear search, return to tree
 #   j/k / up/down     navigate lists
 
 # --- Chalk Imports ---
-(import ../chalk/app)
-(import ../chalk/widget/proto)
-(import ../chalk/widget/text)
-(import ../chalk/widget/container)
-(import ../chalk/widget/border)
-(import ../chalk/widget/list)
-(import ../chalk/widget/input)
-(import ../chalk/widget/checkbox)
+(import chalk/app)
+(import chalk/widget/proto)
+(import chalk/widget/text)
+(import chalk/widget/container)
+(import chalk/widget/border)
+(import chalk/widget/list)
+(import chalk/widget/input)
+(import chalk/widget/checkbox)
 
 # ================================================================
 # Data Layer: Module Discovery & Introspection
@@ -64,7 +64,7 @@
    "fiber" {:fg :red}
    "nil" {:fg :bright-black}})
 
-# --- Package Scanning ---
+# --- Bundle Scanning ---
 
 # Detect native module extension for this platform (.so, .dll, etc.)
 (def native-ext
@@ -104,7 +104,7 @@
 (defn- scan-root-env
   ```
   Scan root-env and group symbols by prefix (string, math, os, etc.).
-  Returns a package entry for Janet builtins.
+  Returns a bundle entry for Janet builtins.
   ```
   []
   (def prefixes @{})
@@ -119,8 +119,8 @@
   (def modules (sort (keys prefixes)))
   @{:name "janet" :modules modules :expanded false})
 
-(defn- scan-packages
-  "Scan syspath for installed packages and their modules."
+(defn- scan-bundles
+  "Scan syspath for installed bundles and their modules."
   []
   (def syspath (dyn *syspath* "."))
   (def results @[])
@@ -181,19 +181,19 @@
 
 (defn- load-module-exports
   "Load a module's exports via require. Returns sorted array of export info."
-  [pkg-name mod-name cache &opt show-private]
+  [bundle-name mod-name cache &opt show-private]
   (default show-private false)
-  (def cache-key (string pkg-name "/" mod-name (if show-private "/+private" "")))
+  (def cache-key (string bundle-name "/" mod-name (if show-private "/+private" "")))
   (when (get cache cache-key)
     (break (get cache cache-key)))
 
-  (when (= pkg-name "janet")
+  (when (= bundle-name "janet")
     (def exports (load-root-env-exports mod-name show-private))
     (put cache cache-key exports)
     (break exports))
 
-  (def mod-path (string pkg-name "/" mod-name))
-  (def mod-suffix (string "/" pkg-name "/" mod-name ".janet"))
+  (def mod-path (string bundle-name "/" mod-name))
+  (def mod-suffix (string "/" bundle-name "/" mod-name ".janet"))
 
   (def exports @[])
   (try
@@ -231,8 +231,8 @@
   Check if any export in a module matches the filter text.
   Loads exports lazily via cache.
   ```
-  [pkg-name mod-name filter-text exports-cache &opt show-private]
-  (def exports (load-module-exports pkg-name mod-name exports-cache show-private))
+  [bundle-name mod-name filter-text exports-cache &opt show-private]
+  (def exports (load-module-exports bundle-name mod-name exports-cache show-private))
   (var found false)
   (each exp exports
     (when (and (not found)
@@ -242,50 +242,50 @@
 
 (defn- rebuild-tree
   ```
-  Flatten packages into display items + metadata map.
+  Flatten bundles into display items + metadata map.
   Returns [tree-items tree-map].
   Filter matches against export names within modules.
   ```
-  [packages search-text exports-cache &opt show-private]
+  [bundles search-text exports-cache &opt show-private]
   (def items @[])
   (def tmap @[])
   (def filter-text (if (and search-text (> (length search-text) 0))
                      (string/ascii-lower search-text)
                      nil))
 
-  (each pkg packages
-    (def pkg-name (pkg :name))
+  (each bdl bundles
+    (def bundle-name (bdl :name))
 
     (var has-matching-module false)
     (def matching-modules @[])
 
-    # Check if package has an init module (exports exposed at package root)
-    (def has-init (find |(= $ "init") (pkg :modules)))
+    # Check if bundle has an init module (exports exposed at bundle root)
+    (def has-init (find |(= $ "init") (bdl :modules)))
 
-    (each mod-name (pkg :modules)
-      (when (not= mod-name "init") # init is shown via package node
+    (each mod-name (bdl :modules)
+      (when (not= mod-name "init") # init is shown via bundle node
         (if filter-text
-          (when (module-exports-match? pkg-name mod-name filter-text exports-cache show-private)
+          (when (module-exports-match? bundle-name mod-name filter-text exports-cache show-private)
             (set has-matching-module true)
             (array/push matching-modules mod-name))
           (array/push matching-modules mod-name))))
 
     # Also match if init module's exports match the filter
     (when (and filter-text has-init (not has-matching-module))
-      (when (module-exports-match? pkg-name "init" filter-text exports-cache show-private)
+      (when (module-exports-match? bundle-name "init" filter-text exports-cache show-private)
         (set has-matching-module true)))
 
     (when (or (not filter-text) has-matching-module)
-      (def expanded (or (pkg :expanded) (and filter-text has-matching-module)))
+      (def expanded (or (bdl :expanded) (and filter-text has-matching-module)))
       (def prefix (if expanded "v " "> "))
-      (array/push items (string prefix pkg-name))
-      (array/push tmap @{:type :package :name pkg-name :pkg pkg
+      (array/push items (string prefix bundle-name))
+      (array/push tmap @{:type :bundle :name bundle-name :bdl bdl
                          :has-init has-init})
 
       (when expanded
         (each mod-name matching-modules
           (array/push items (string "    " mod-name))
-          (array/push tmap @{:type :module :name mod-name :pkg-name pkg-name})))))
+          (array/push tmap @{:type :module :name mod-name :bundle-name bundle-name})))))
 
   [items tmap])
 
@@ -382,11 +382,11 @@
 
 (defn- refresh-tree [self]
   (def state (self :state))
-  (def packages (state :packages))
+  (def bundles (state :bundles))
   (def search-text (state :search-text))
   (def exports-cache (state :exports-cache))
   (def show-private (state :show-private))
-  (def [items tmap] (rebuild-tree packages search-text exports-cache show-private))
+  (def [items tmap] (rebuild-tree bundles search-text exports-cache show-private))
   (put state :tree-items items)
   (put state :tree-map tmap)
 
@@ -410,8 +410,8 @@
   (def exports-cache (state :exports-cache))
   (def show-private (state :show-private))
   (def search-text (or filter (state :search-text)))
-  (def [pkg-name mod-name] (string/split "/" selected-mod 0 2))
-  (def exports (load-module-exports pkg-name mod-name exports-cache show-private))
+  (def [bundle-name mod-name] (string/split "/" selected-mod 0 2))
+  (def exports (load-module-exports bundle-name mod-name exports-cache show-private))
   (def [di ds] (build-detail-items exports search-text))
 
   (def detail-list (proto/find-by-id self "detail-list"))
@@ -428,7 +428,7 @@
 
 (defn- select-module [self entry]
   (def state (self :state))
-  (put state :selected-mod (string (entry :pkg-name) "/" (entry :name)))
+  (put state :selected-mod (string (entry :bundle-name) "/" (entry :name)))
   (refresh-detail self))
 
 (defn- update-focus-indicators [self focused-id]
@@ -440,7 +440,7 @@
     (def active (= focused-id "tree-list"))
     (put tree-panel :style (if active {:fg :cyan} {:fg :white}))
     (put (tree-panel :state) :title
-         (if active " Packages (active) " " Packages ")))
+         (if active " Bundles (active) " " Bundles ")))
 
   (def detail-panel (proto/find-by-id self "detail-panel"))
   (when detail-panel
@@ -475,7 +475,7 @@
       (def entry (get tree-map i))
       (when (and (not found-idx)
                  (= (entry :type) :module)
-                 (= (string (entry :pkg-name) "/" (entry :name)) selected-mod))
+                 (= (string (entry :bundle-name) "/" (entry :name)) selected-mod))
         (set found-idx i))))
 
   (if found-idx
@@ -505,8 +505,8 @@
 # App Definition
 # ================================================================
 
-(app/defapp module-browser
-            (state {:packages @[]
+(app/defapp bundle-browser
+            (state {:bundles @[]
                     :exports-cache @{}
                     :tree-items @[]
                     :tree-map @[]
@@ -536,7 +536,8 @@
                       (container/container
                         :id "header"
                         :children
-                        @[(text/text "Janet Module Browser" :text-align :center :flex-grow 1)])
+                        @[(text/text (string "Janet Bundle Browser - " (dyn *syspath* "."))
+                                     :text-align :center :flex-grow 1)])
 
                       # Footer (docked to bottom via CSS)
                       (container/container
@@ -577,7 +578,7 @@
                             :id "tree-panel"
                             :border-style :rounded
                             :width 32
-                            :title " Packages (active) "
+                            :title " Bundles (active) "
                             :style {:fg :cyan})
 
                           # Detail panel
@@ -595,8 +596,8 @@
 
             (mount [self]
                    (def state (self :state))
-                   (def packages (scan-packages))
-                   (put state :packages packages)
+                   (def bundles (scan-bundles))
+                   (put state :bundles bundles)
                    (put state :exports-cache @{})
                    (refresh-tree self)
                    # Set initial focus on tree-list
@@ -651,7 +652,7 @@
                     (case (entry :type)
                       :module
                       (select-module self entry)
-                      :package
+                      :bundle
                       (if (entry :has-init)
                         (do
                           (put state :selected-mod
@@ -669,7 +670,7 @@
                           (when detail-panel
                             (put (detail-panel :state) :title " Exports "))))))))
 
-            # Enter on tree: toggle package expand/collapse or select module
+            # Enter on tree: toggle bundle expand/collapse or select module
             (on :list-selected [self msg]
                 (when (= (msg :id) "tree-list")
                   (def state (self :state))
@@ -678,10 +679,10 @@
                   (when (< idx (length tree-map))
                     (def entry (get tree-map idx))
                     (case (entry :type)
-                      :package
+                      :bundle
                       (do
-                        (def pkg (entry :pkg))
-                        (put pkg :expanded (not (pkg :expanded)))
+                        (def bdl (entry :bdl))
+                        (put bdl :expanded (not (bdl :expanded)))
                         (refresh-tree self)
                         (refresh-detail self))
 
@@ -720,6 +721,6 @@
             (on :focus-changed [self msg]
                 (update-focus-indicators self (msg :widget-id))))
 
-(defn main [&] (app/run module-browser))
+(defn main [&] (app/run bundle-browser))
 (main)
 (os/exit 0)
