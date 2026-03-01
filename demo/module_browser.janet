@@ -1,22 +1,45 @@
-# Module Browser Demo: Browse installed Janet packages, modules, and exports
-# ctrl-c to quit, tab/shift-tab to cycle focus, enter/space to expand/select,
-# / to search, escape to clear search, j/k/up/down to navigate
+# ================================================================
+# Module Browser - A chalk demo application
+# ================================================================
+# Browse installed Janet packages, modules, and their exports.
+#
+# Keybindings:
+#   ctrl-c            quit
+#   tab / shift-tab   cycle focus (tree -> detail -> search -> checkbox)
+#   enter / space     expand package or select module
+#   /                 jump to search input
+#   escape            clear search, return to tree
+#   j/k / up/down     navigate lists
 
+# --- Chalk Imports ---
+# Platform: terminal raw mode and size detection (FFI to libc)
 (import ../chalk/platform/init :as platform)
+# Terminal output: buffered escape sequences (cursor, color, alt screen)
 (import ../chalk/terminal/output :as output)
+# Virtual screen buffer with diff-based rendering
 (import ../chalk/terminal/screen :as screen)
+# SGR style codes (fg, bg, bold, etc.)
 (import ../chalk/terminal/style :as style)
+# Synchronous event loop: read keypresses and resize events
 (import ../chalk/events/loop :as loop)
+# Widget protocol: mount-tree lifecycle hook
 (import ../chalk/widget/proto)
+# Leaf widgets: text display, input field, checkbox, list, border
 (import ../chalk/widget/text)
 (import ../chalk/widget/container)
 (import ../chalk/widget/border)
 (import ../chalk/widget/list)
 (import ../chalk/widget/input)
 (import ../chalk/widget/checkbox)
+# Render pipeline: layout + paint widget tree onto screen buffer
 (import ../chalk/widget/render)
+# CSS cascade: parse stylesheet and apply styles to widget tree
 (import ../chalk/style/cascade)
 
+# --- Stylesheet ---
+# Chalk supports a CSS subset for styling widget trees. Selectors match
+# widget :id values (#header), and properties map to terminal attributes.
+# The `dock` property pins a widget to a screen edge (top/bottom).
 (def app-css `
   #header {
     background: blue;
@@ -34,7 +57,50 @@
   }
 `)
 
-# --- Module Discovery ---
+# ================================================================
+# Data Layer: Module Discovery & Introspection
+# ================================================================
+
+# --- Type Classification ---
+
+(defn- classify-value
+  ```
+  Return a type string for a binding's value (function, macro, cfunction, etc.).
+  Used to label exports in the detail panel.
+  ```
+  [meta value]
+  (cond
+    (get meta :macro) "macro"
+    (function? value) "function"
+    (cfunction? value) "cfunction"
+    (fiber? value) "fiber"
+    (number? value) "number"
+    (string? value) "string"
+    (array? value) "array"
+    (table? value) "table"
+    (tuple? value) "tuple"
+    (buffer? value) "buffer"
+    (keyword? value) "keyword"
+    (symbol? value) "symbol"
+    (boolean? value) "boolean"
+    (nil? value) "nil"
+    "value"))
+
+(def type-colors
+  {"function" {:fg :cyan}
+   "cfunction" {:fg :cyan}
+   "macro" {:fg :magenta}
+   "number" {:fg :yellow}
+   "string" {:fg :green}
+   "boolean" {:fg :yellow}
+   "keyword" {:fg :green}
+   "table" {:fg :yellow}
+   "array" {:fg :yellow}
+   "tuple" {:fg :yellow}
+   "fiber" {:fg :red}
+   "nil" {:fg :bright-black}})
+
+# --- Package Scanning ---
 
 # Detect native module extension for this platform (.so, .dll, etc.)
 (def native-ext
@@ -72,8 +138,10 @@
   modules)
 
 (defn- scan-root-env
-  "Scan root-env and group symbols by prefix (string, math, os, etc.).
-   Returns a package entry for Janet builtins."
+  ```
+  Scan root-env and group symbols by prefix (string, math, os, etc.).
+  Returns a package entry for Janet builtins.
+  ```
   []
   (def prefixes @{})
   (each [k _] (pairs root-env)
@@ -86,51 +154,6 @@
         (put prefixes prefix true))))
   (def modules (sort (keys prefixes)))
   @{:name "janet" :modules modules :expanded false})
-
-(defn- load-root-env-exports
-  "Load exports from root-env for a given prefix module.
-   prefix 'core' means unprefixed symbols."
-  [mod-name show-private]
-  (def exports @[])
-  (def is-core (= mod-name "core"))
-  (def prefix-slash (if is-core nil (string mod-name "/")))
-
-  (each [k v] (pairs root-env)
-    (def name-str (string k))
-    (def meta (if (table? v) v @{}))
-    (when (and (not (string/has-prefix? "_" name-str))
-               (not (string/has-prefix? ":" name-str))
-               (or show-private (not (get meta :private))))
-      (def has-slash (string/find "/" name-str))
-      (def has-prefix (and has-slash (> has-slash 0)))
-      (def matches
-        (if is-core
-          (not has-prefix)
-          (and prefix-slash (string/has-prefix? prefix-slash name-str))))
-      (when matches
-        (def doc-str (get meta :doc))
-        (def value (or (get meta :value) (get meta :ref)))
-        (def type-str
-          (cond
-            (get meta :macro) "macro"
-            (function? value) "function"
-            (cfunction? value) "cfunction"
-            (fiber? value) "fiber"
-            (number? value) "number"
-            (string? value) "string"
-            (array? value) "array"
-            (table? value) "table"
-            (tuple? value) "tuple"
-            (buffer? value) "buffer"
-            (keyword? value) "keyword"
-            (symbol? value) "symbol"
-            (boolean? value) "boolean"
-            (nil? value) "nil"
-            "value"))
-        (array/push exports @{:name name-str :type type-str :doc doc-str}))))
-
-  (sort-by |($ :name) exports)
-  exports)
 
 (defn- scan-packages
   "Scan syspath for installed packages and their modules."
@@ -161,6 +184,39 @@
   # Prepend Janet builtins as the first package
   (array/insert results 0 (scan-root-env))
   results)
+
+# --- Export Loading ---
+
+(defn- load-root-env-exports
+  ```
+  Load exports from root-env for a given prefix module.
+  prefix "core" means unprefixed symbols.
+  ```
+  [mod-name show-private]
+  (def exports @[])
+  (def is-core (= mod-name "core"))
+  (def prefix-slash (if is-core nil (string mod-name "/")))
+
+  (each [k v] (pairs root-env)
+    (def name-str (string k))
+    (def meta (if (table? v) v @{}))
+    (when (and (not (string/has-prefix? "_" name-str))
+               (not (string/has-prefix? ":" name-str))
+               (or show-private (not (get meta :private))))
+      (def has-slash (string/find "/" name-str))
+      (def has-prefix (and has-slash (> has-slash 0)))
+      (def matches
+        (if is-core
+          (not has-prefix)
+          (and prefix-slash (string/has-prefix? prefix-slash name-str))))
+      (when matches
+        (def doc-str (get meta :doc))
+        (def value (or (get meta :value) (get meta :ref)))
+        (def type-str (classify-value meta value))
+        (array/push exports @{:name name-str :type type-str :doc doc-str}))))
+
+  (sort-by |($ :name) exports)
+  exports)
 
 (defn- load-module-exports
   "Load a module's exports via require. Returns sorted array of export info."
@@ -202,23 +258,7 @@
                     (string/has-suffix? ".h" sm-file))
             (def doc-str (get meta :doc))
             (def value (or (get meta :value) (get meta :ref)))
-            (def type-str
-              (cond
-                (get meta :macro) "macro"
-                (function? value) "function"
-                (cfunction? value) "cfunction"
-                (fiber? value) "fiber"
-                (number? value) "number"
-                (string? value) "string"
-                (array? value) "array"
-                (table? value) "table"
-                (tuple? value) "tuple"
-                (buffer? value) "buffer"
-                (keyword? value) "keyword"
-                (symbol? value) "symbol"
-                (boolean? value) "boolean"
-                (nil? value) "nil"
-                "value"))
+            (def type-str (classify-value meta value))
             (array/push exports @{:name name-str :type type-str :doc doc-str})))))
     ([err]
       (array/push exports @{:name "(error loading module)" :type "error" :doc (string err)})))
@@ -227,11 +267,13 @@
   (put cache cache-key exports)
   exports)
 
-# --- Tree Flattening ---
+# --- Tree Model ---
 
 (defn- module-exports-match?
-  "Check if any export in a module matches the filter text.
-   Loads exports lazily via cache."
+  ```
+  Check if any export in a module matches the filter text.
+  Loads exports lazily via cache.
+  ```
   [pkg-name mod-name filter-text exports-cache &opt show-private]
   (def exports (load-module-exports pkg-name mod-name exports-cache show-private))
   (var found false)
@@ -242,9 +284,11 @@
   found)
 
 (defn- rebuild-tree
-  "Flatten packages into display items + metadata map.
-   Returns [tree-items tree-map].
-   Filter matches against export names within modules."
+  ```
+  Flatten packages into display items + metadata map.
+  Returns [tree-items tree-map].
+  Filter matches against export names within modules.
+  ```
   [packages search-text exports-cache &opt show-private]
   (def items @[])
   (def tmap @[])
@@ -308,24 +352,12 @@
 
 (var detail-wrap-width 60)
 
-(def type-colors
-  {"function" {:fg :cyan}
-   "cfunction" {:fg :cyan}
-   "macro" {:fg :magenta}
-   "number" {:fg :yellow}
-   "string" {:fg :green}
-   "boolean" {:fg :yellow}
-   "keyword" {:fg :green}
-   "table" {:fg :yellow}
-   "array" {:fg :yellow}
-   "tuple" {:fg :yellow}
-   "fiber" {:fg :red}
-   "nil" {:fg :bright-black}})
-
 (defn- build-detail-items
-  "Format exports into display strings for the detail list.
-   When filter-text is non-empty, only shows exports whose name matches.
-   Returns [items item-styles]."
+  ```
+  Format exports into display strings for the detail list.
+  When filter-text is non-empty, only shows exports whose name matches.
+  Returns [items item-styles].
+  ```
   [exports &opt filter-text]
   (def ft (if (and filter-text (> (length filter-text) 0))
             (string/ascii-lower filter-text)
@@ -352,7 +384,9 @@
     [@[(if ft "(no matching exports)" "(no exports)")] @[nil]]
     [items styles]))
 
-# --- Main ---
+# ================================================================
+# UI Layer: Layout, Widgets & Event Loop
+# ================================================================
 
 (defn main [&]
   (def [cols rows] (platform/get-terminal-size))
@@ -374,10 +408,28 @@
   (var tree-sel-override nil) # when non-nil, force tree selection to this index on next redraw
   (var tree-panel-width 32)
 
+  # --- Helper closures ---
+  # These close over app state vars above to eliminate repeated inline patterns.
+
+  (defn refresh-tree-data []
+    (def rebuilt (rebuild-tree packages search-text exports-cache show-private))
+    (set tree-items (get rebuilt 0))
+    (set tree-map (get rebuilt 1)))
+
+  (defn refresh-detail [&opt filter]
+    (when selected-mod
+      (def [pkg-name mod-name] (string/split "/" selected-mod 0 2))
+      (def exports (load-module-exports pkg-name mod-name exports-cache show-private))
+      (let [[di ds] (build-detail-items exports (or filter search-text))]
+        (set detail-items di)
+        (set detail-styles ds))))
+
+  (defn select-module [entry]
+    (set selected-mod (string (entry :pkg-name) "/" (entry :name)))
+    (refresh-detail))
+
   # Initial tree build
-  (def initial (rebuild-tree packages search-text exports-cache show-private))
-  (set tree-items (get initial 0))
-  (set tree-map (get initial 1))
+  (refresh-tree-data)
 
   (defn compute-tree-width []
     # Auto-widen from longest item + 2 (list padding) + 2 (border), capped at 40% of screen
@@ -393,12 +445,16 @@
       (string (string/slice item 0 (- max-len 3)) "...")
       item))
 
+  # build-ui constructs a fresh widget tree from current state each frame.
+  # This "rebuild-on-change" pattern avoids stale closures: instead of mutating
+  # widgets in place, we recreate the tree and restore selection indices.
   (defn build-ui []
     (set tree-panel-width (compute-tree-width))
     (set detail-wrap-width (max 20 (- current-cols tree-panel-width 6)))
     (def inner-width (- tree-panel-width 4))
     (def display-items (map |(truncate-item $ inner-width) tree-items))
 
+    # List widget: scrollable, keyboard-navigable list of items
     (def tree-list (list/list-widget
                      :id "tree-list"
                      :items display-items
@@ -412,6 +468,7 @@
                        :style {:fg :white}
                        :flex-grow 1))
 
+    # Input widget: single-line text field with placeholder
     (def search-input (input/input-widget
                         :id "search-input"
                         :value search-text
@@ -420,6 +477,7 @@
                         :flex-grow 1
                         :height 1))
 
+    # Checkbox widget: toggleable boolean with label
     (def private-checkbox (checkbox/checkbox-widget
                             :id "private-checkbox"
                             :checked show-private
@@ -435,6 +493,8 @@
         (string " " selected-mod " ")
         " Exports "))
 
+    # Container: flex layout parent. Border: decorative frame around a child.
+    # The tree assembles as: column[ header, footer(docked), row[ tree-panel, detail-panel ] ]
     (def root
       (container/container
         :id "app"
@@ -446,7 +506,7 @@
             :children
             @[(text/text "Janet Module Browser" :text-align :center :flex-grow 1)])
 
-          # Footer
+          # Footer (docked to bottom via CSS)
           (container/container
             :id "footer"
             :flex-direction :row
@@ -457,7 +517,7 @@
               private-checkbox
               (text/text " esc: clear | ctrl-c: quit " :width 28)])
 
-          # Main area
+          # Main area: side-by-side tree and detail panels
           (container/container
             :id "main"
             :flex-direction :row
@@ -483,9 +543,13 @@
                          detail-title)
                 :style (if (= focus :detail) {:fg :cyan} {:fg :white}))])]))
 
+    # Apply CSS stylesheet to the widget tree (selector matching + cascade)
     (cascade/apply-stylesheet app-css root)
     [root tree-list detail-list search-input private-checkbox])
 
+  # --- Event loop setup ---
+  # Enter raw mode so we receive individual keypresses instead of line-buffered input.
+  # Alt screen preserves the user's terminal content and restores it on exit.
   (platform/enter-raw-mode)
   (defer (do
            (loop/stop)
@@ -500,11 +564,13 @@
     (output/hide-cursor)
     (output/flush)
 
+    # Screen buffer: virtual grid that diffs against previous frame to minimize escape sequences
     (var scr (screen/make-screen current-cols current-rows))
     (screen/screen-force-redraw scr)
 
     (loop/start)
 
+    # mount-tree runs lifecycle hooks; render-tree does layout + paint
     (var ui-parts (build-ui))
     (var root (get ui-parts 0))
     (var tree-list (get ui-parts 1))
@@ -514,6 +580,8 @@
     (proto/mount-tree root)
     (render/render-tree scr root current-cols current-rows)
 
+    # --- Main event loop ---
+    # Each iteration: read events, handle input, rebuild UI if state changed.
     (while (not quit)
       (def events (loop/read-events))
       (var needs-redraw false)
@@ -558,19 +626,11 @@
               (do
                 (set search-text "")
                 (set focus :tree)
-                (def rebuilt (rebuild-tree packages search-text exports-cache show-private))
-                (set tree-items (get rebuilt 0))
-                (set tree-map (get rebuilt 1))
-                # Clear filter from detail panel
-                (when selected-mod
-                  (def [pkg-name mod-name] (string/split "/" selected-mod 0 2))
-                  (def exports (load-module-exports pkg-name mod-name exports-cache show-private))
-                  (let [[di ds] (build-detail-items exports)]
-                    (set detail-items di)
-                    (set detail-styles ds)))
+                (refresh-tree-data)
+                (refresh-detail "")
                 (set needs-redraw true))
 
-              # Tree focus
+              # Tree focus: navigate and select
               (= focus :tree)
               (do
                 (cond
@@ -585,18 +645,12 @@
                         (do
                           (def pkg (entry :pkg))
                           (put pkg :expanded (not (pkg :expanded)))
-                          (def rebuilt (rebuild-tree packages search-text exports-cache show-private))
-                          (set tree-items (get rebuilt 0))
-                          (set tree-map (get rebuilt 1))
+                          (refresh-tree-data)
                           (set needs-redraw true))
 
                         :module
                         (do
-                          (def exports (load-module-exports (entry :pkg-name) (entry :name) exports-cache show-private))
-                          (let [[di ds] (build-detail-items exports search-text)]
-                            (set detail-items di)
-                            (set detail-styles ds))
-                          (set selected-mod (string (entry :pkg-name) "/" (entry :name)))
+                          (select-module entry)
                           (set needs-redraw true)))))
 
                   # Navigation: forward to list widget
@@ -608,20 +662,16 @@
                     (when (< sel (length tree-map))
                       (def entry (get tree-map sel))
                       (when (= (entry :type) :module)
-                        (def exports (load-module-exports (entry :pkg-name) (entry :name) exports-cache show-private))
-                        (let [[di ds] (build-detail-items exports search-text)]
-                          (set detail-items di)
-                          (set detail-styles ds))
-                        (set selected-mod (string (entry :pkg-name) "/" (entry :name)))
+                        (select-module entry)
                         (set needs-redraw true))))))
 
-              # Detail focus
+              # Detail focus: forward all keys to the detail list
               (= focus :detail)
               (do
                 (def result ((detail-list :handle-event) detail-list event))
                 (when result (set needs-redraw true)))
 
-              # Checkbox focus
+              # Checkbox focus: toggle show-private on space/enter
               (= focus :checkbox)
               (do
                 (when (or (= k " ") (= k :enter))
@@ -629,16 +679,10 @@
                   # Invalidate exports cache
                   (each ck (keys exports-cache)
                     (put exports-cache ck nil))
-                  # Reload detail panel if a module is selected
-                  (when selected-mod
-                    (def [pkg-name mod-name] (string/split "/" selected-mod 0 2))
-                    (def exports (load-module-exports pkg-name mod-name exports-cache show-private))
-                    (let [[di ds] (build-detail-items exports search-text)]
-                      (set detail-items di)
-                      (set detail-styles ds)))
+                  (refresh-detail)
                   (set needs-redraw true)))
 
-              # Search focus
+              # Search focus: type to filter, enter to confirm
               (= focus :search)
               (if (= k :enter)
                 (do
@@ -647,9 +691,7 @@
                 (do
                   (def result ((search-input :handle-event) search-input event))
                   (set search-text (get-in search-input [:state :value] ""))
-                  (def rebuilt (rebuild-tree packages search-text exports-cache show-private))
-                  (set tree-items (get rebuilt 0))
-                  (set tree-map (get rebuilt 1))
+                  (refresh-tree-data)
                   # Sync tree selection with selected-mod
                   # Find current module's index in the new tree
                   (var found-idx nil)
@@ -662,15 +704,11 @@
                         (set found-idx i))))
                   (if found-idx
                     (do
-                      # Current module still visible -- keep it selected
+                      # Current module still visible - keep it selected
                       (set tree-sel-override found-idx)
-                      (def [pkg-name mod-name] (string/split "/" selected-mod 0 2))
-                      (def exports (load-module-exports pkg-name mod-name exports-cache show-private))
-                      (let [[di ds] (build-detail-items exports search-text)]
-                        (set detail-items di)
-                        (set detail-styles ds)))
+                      (refresh-detail))
                     (do
-                      # Current module gone or none selected -- auto-select first module
+                      # Current module gone or none selected - auto-select first module
                       (var first-mod-idx nil)
                       (for i 0 (length tree-map)
                         (when (and (not first-mod-idx)
@@ -679,12 +717,8 @@
                       (if first-mod-idx
                         (do
                           (def entry (get tree-map first-mod-idx))
-                          (set selected-mod (string (entry :pkg-name) "/" (entry :name)))
-                          (set tree-sel-override first-mod-idx)
-                          (def exports (load-module-exports (entry :pkg-name) (entry :name) exports-cache show-private))
-                          (let [[di ds] (build-detail-items exports search-text)]
-                            (set detail-items di)
-                            (set detail-styles ds)))
+                          (select-module entry)
+                          (set tree-sel-override first-mod-idx))
                         (do
                           (set selected-mod nil)
                           (set detail-items @["No matching exports"])
@@ -699,12 +733,13 @@
             (screen/screen-force-redraw scr)
             (set needs-redraw true))))
 
+      # --- Redraw ---
+      # Save selection indices, rebuild the entire widget tree from current state,
+      # then restore selections. This avoids stale widget references.
       (when (and needs-redraw (not quit))
-        # Save selection state
         (def old-tree-sel (get-in tree-list [:state :selected] 0))
         (def old-detail-sel (get-in detail-list [:state :selected] 0))
 
-        # Rebuild UI
         (def new-ui (build-ui))
         (set root (get new-ui 0))
         (set tree-list (get new-ui 1))
@@ -712,7 +747,7 @@
         (set search-input (get new-ui 3))
         (set private-cb (get new-ui 4))
 
-        # Restore selections -- use override if set, otherwise preserve old index
+        # Restore selections - use override if set, otherwise preserve old index
         (def tree-sel
           (if tree-sel-override
             tree-sel-override
