@@ -44,6 +44,7 @@
            :margin margin
            :padding padding
            :dock dock
+           :focusable true
 
            :handle-event
            (fn [self event]
@@ -57,34 +58,43 @@
                (case (event :key)
                  :up
                  (do
-                   (put state :selected (max 0 (- sel 1)))
-                   # Scroll if needed
-                   (when (< (state :selected) (state :scroll-offset))
-                     (put state :scroll-offset (state :selected)))
-                   {:redraw true})
+                   (def new-sel (max 0 (- sel 1)))
+                   (put state :selected new-sel)
+                   (when (< new-sel (state :scroll-offset))
+                     (put state :scroll-offset new-sel))
+                   {:redraw true
+                    :msg {:type :list-changed :id (self :id) :index new-sel}})
 
                  :down
                  (do
-                   (put state :selected (min (- count 1) (+ sel 1)))
-                   {:redraw true})
+                   (def new-sel (min (- count 1) (+ sel 1)))
+                   (put state :selected new-sel)
+                   {:redraw true
+                    :msg {:type :list-changed :id (self :id) :index new-sel}})
 
                  "k"
                  (do
-                   (put state :selected (max 0 (- sel 1)))
-                   (when (< (state :selected) (state :scroll-offset))
-                     (put state :scroll-offset (state :selected)))
-                   {:redraw true})
+                   (def new-sel (max 0 (- sel 1)))
+                   (put state :selected new-sel)
+                   (when (< new-sel (state :scroll-offset))
+                     (put state :scroll-offset new-sel))
+                   {:redraw true
+                    :msg {:type :list-changed :id (self :id) :index new-sel}})
 
                  "j"
                  (do
-                   (put state :selected (min (- count 1) (+ sel 1)))
-                   {:redraw true})
+                   (def new-sel (min (- count 1) (+ sel 1)))
+                   (put state :selected new-sel)
+                   {:redraw true
+                    :msg {:type :list-changed :id (self :id) :index new-sel}})
 
                  :enter
                  (do
                    (when (state :on-select)
                      ((state :on-select) sel (get items-list sel)))
-                   {:redraw true}))))
+                   {:redraw true
+                    :msg {:type :list-selected :id (self :id)
+                          :index sel :item (get items-list sel)}}))))
 
            :paint
            (fn [self scr rect]

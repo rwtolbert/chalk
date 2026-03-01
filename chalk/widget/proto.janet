@@ -9,7 +9,7 @@
   [type &named id classes style width height min-width max-width min-height max-height
    margin margin-top margin-right margin-bottom margin-left
    padding padding-top padding-right padding-bottom padding-left
-   flex-direction flex-grow flex-shrink dock
+   flex-direction flex-grow flex-shrink dock focusable
    mount unmount render paint handle-event update]
   @{:type type
     :id id
@@ -20,6 +20,7 @@
     :children @[]
     :parent nil
     :mounted false
+    :focusable focusable
     # Layout props stored for build-layout-tree
     :width (or width :auto)
     :height (or height :auto)
@@ -135,10 +136,83 @@
           (set found (find-by-id child id))))
       found)))
 
+# --- Focus system ---
+
+(defn build-focus-ring
+  "Depth-first walk, collect widgets with :focusable truthy. Returns flat array."
+  [root]
+  (def ring @[])
+  (defn walk [w]
+    (when (w :focusable) (array/push ring w))
+    (each child (w :children) (walk child)))
+  (walk root)
+  ring)
+
+(defn init-focus
+  "Build focus ring and attach focus-state to root. Called lazily on first key event."
+  [root]
+  (def ring (build-focus-ring root))
+  (def fs @{:ring ring :index 0 :root root})
+  (put root :focus-state fs)
+  fs)
+
+(defn focused-widget
+  "Return the currently focused widget, or nil if ring is empty."
+  [focus-state]
+  (def ring (focus-state :ring))
+  (if (= (length ring) 0)
+    nil
+    (get ring (focus-state :index))))
+
+(defn focus-next
+  "Cycle focus forward, wrapping around."
+  [focus-state]
+  (def ring (focus-state :ring))
+  (when (> (length ring) 0)
+    (put focus-state :index (% (+ (focus-state :index) 1) (length ring)))))
+
+(defn focus-prev
+  "Cycle focus backward, wrapping around."
+  [focus-state]
+  (def ring (focus-state :ring))
+  (when (> (length ring) 0)
+    (put focus-state :index (% (+ (focus-state :index) (- (length ring) 1)) (length ring)))))
+
+(defn set-focus
+  "Focus a specific widget by reference. Returns true if found in ring."
+  [focus-state widget]
+  (def ring (focus-state :ring))
+  (var found false)
+  (for i 0 (length ring)
+    (when (and (not found) (= (get ring i) widget))
+      (put focus-state :index i)
+      (set found true)))
+  found)
+
+(defn refresh-focus-ring
+  "Rebuild ring after tree mutation. Preserve focus if widget still present."
+  [focus-state]
+  (def old-focused (focused-widget focus-state))
+  (def root (focus-state :root))
+  (def ring (build-focus-ring root))
+  (put focus-state :ring ring)
+  (if (and old-focused (find |(= $ old-focused) ring))
+    (set-focus focus-state old-focused)
+    (put focus-state :index 0)))
+
+(defn- bubble-msg
+  "Bubble a message from target up through ancestors' :update hooks."
+  [target msg]
+  (var w (target :parent))
+  (while w
+    (when (w :update)
+      ((w :update) w msg))
+    (set w (w :parent))))
+
 (defn dispatch-event
   ```Deliver an event to the widget tree.
    Mouse events hit-test rects (deepest match wins).
-   Key events go to root.
+   Key events route to focused widget (with root fallback).
    Handlers return {:msg m} to bubble to parent's :update.```
   [root event]
   (var target nil)
@@ -160,19 +234,66 @@
         (set result ((target :handle-event) target event))))
 
     :key
-    (when (root :handle-event)
-      (set result ((root :handle-event) root event)))
+    (do
+      # Lazy-init focus on first key event
+      (def fs (or (root :focus-state) (init-focus root)))
+      (def focused (focused-widget fs))
+      (def k (event :key))
+
+      (cond
+        # Tab: offer to focused widget first, cycle if not consumed
+        (= k :tab)
+        (do
+          (var consumed nil)
+          (when (and focused (focused :handle-event))
+            (set consumed ((focused :handle-event) focused event)))
+          (if consumed
+            (do (set target focused) (set result consumed))
+            (do
+              (focus-next fs)
+              (def new-focused (focused-widget fs))
+              (set target new-focused)
+              (set result {:redraw true
+                           :msg {:type :focus-changed
+                                 :widget-id (when new-focused (new-focused :id))}}))))
+
+        # Shift-Tab: same but backwards
+        (= k :shift-tab)
+        (do
+          (var consumed nil)
+          (when (and focused (focused :handle-event))
+            (set consumed ((focused :handle-event) focused event)))
+          (if consumed
+            (do (set target focused) (set result consumed))
+            (do
+              (focus-prev fs)
+              (def new-focused (focused-widget fs))
+              (set target new-focused)
+              (set result {:redraw true
+                           :msg {:type :focus-changed
+                                 :widget-id (when new-focused (new-focused :id))}}))))
+
+        # Other keys: route to focused widget, fallback to root
+        (do
+          (when (and focused (focused :handle-event))
+            (set target focused)
+            (set result ((focused :handle-event) focused event)))
+          # Fallback to root if focused widget didn't consume and is not root
+          (when (and (nil? result) focused (not= focused root) (root :handle-event))
+            (set target root)
+            (set result ((root :handle-event) root event)))
+          # No focusable widgets: keys go to root
+          (when (and (nil? focused) (root :handle-event))
+            (set target root)
+            (set result ((root :handle-event) root event))))))
 
     :resize
     (when (root :handle-event)
+      (set target root)
       (set result ((root :handle-event) root event))))
 
   # Bubble messages up to parent's :update
   (when (and result (get result :msg) target)
-    (var w (target :parent))
-    (while w
-      (when (w :update)
-        ((w :update) w (result :msg)))
-      (set w (w :parent))))
+    (bubble-msg target (result :msg)))
 
   result)

@@ -121,7 +121,7 @@
 
   # Generate constructor
   ~(defn ,name [&named id classes style width height flex-grow flex-shrink
-                margin padding dock flex-direction]
+                margin padding dock flex-direction focusable]
      (def w (,proto/make-widget
               ,(string name)
               :id id
@@ -135,6 +135,7 @@
               :padding padding
               :dock dock
               :flex-direction flex-direction
+              :focusable focusable
               :handle-event ,handle-event-code
               :update ,update-code
               :paint ,paint-code

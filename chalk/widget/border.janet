@@ -72,14 +72,16 @@
                  (screen/screen-put scr c1 r (chars :v) s)
                  (screen/screen-put scr c2 r (chars :v) s))
 
-               # Title
-               (when (and title (> (rect :width) 4))
+               # Title - read from state for dynamic updates
+               (def t (get (self :state) :title))
+               (def ta (get (self :state) :title-align :left))
+               (when (and t (> (rect :width) 4))
                  (def max-title-w (- (rect :width) 4))
-                 (def display-title (if (> (length title) max-title-w)
-                                      (string/slice title 0 max-title-w)
-                                      title))
+                 (def display-title (if (> (length t) max-title-w)
+                                      (string/slice t 0 max-title-w)
+                                      t))
                  (def title-col
-                   (case title-align
+                   (case ta
                      :center (+ c1 (math/floor (/ (- (rect :width) (length display-title)) 2)))
                      :right (- c2 (length display-title) 1)
                      # :left default
@@ -87,6 +89,10 @@
                  (screen/screen-put scr (- title-col 1) r1 " " s)
                  (screen/screen-put-string scr title-col r1 display-title s)
                  (screen/screen-put scr (+ title-col (length display-title)) r1 " " s))))))
+
+  # Store title/title-align in state for dynamic updates
+  (put (w :state) :title title)
+  (put (w :state) :title-align (or title-align :left))
 
   (when child
     (proto/widget-add-child w child))

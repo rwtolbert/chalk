@@ -44,6 +44,7 @@
            :margin margin
            :padding padding
            :dock dock
+           :focusable true
 
            :handle-event
            (fn [self event]
@@ -62,7 +63,8 @@
                    (put state :value new-val)
                    (put state :cursor-pos (+ pos 1))
                    (when (state :on-change) ((state :on-change) new-val))
-                   {:redraw true})
+                   {:redraw true
+                    :msg {:type :input-changed :id (self :id) :value new-val}})
 
                  (= k :backspace)
                  (when (> pos 0)
@@ -71,7 +73,8 @@
                    (put state :value new-val)
                    (put state :cursor-pos (- pos 1))
                    (when (state :on-change) ((state :on-change) new-val))
-                   {:redraw true})
+                   {:redraw true
+                    :msg {:type :input-changed :id (self :id) :value new-val}})
 
                  (= k :delete)
                  (when (< pos (length val))
@@ -79,7 +82,8 @@
                                         (string/slice val (+ pos 1))))
                    (put state :value new-val)
                    (when (state :on-change) ((state :on-change) new-val))
-                   {:redraw true})
+                   {:redraw true
+                    :msg {:type :input-changed :id (self :id) :value new-val}})
 
                  (= k :left)
                  (when (> pos 0)
@@ -104,7 +108,8 @@
                  (= k :enter)
                  (do
                    (when (state :on-submit) ((state :on-submit) val))
-                   {:redraw true})
+                   {:redraw true
+                    :msg {:type :input-submitted :id (self :id) :value val}})
 
                  # ctrl-u: clear
                  (= k :ctrl-u)
@@ -112,7 +117,8 @@
                    (put state :value "")
                    (put state :cursor-pos 0)
                    (when (state :on-change) ((state :on-change) ""))
-                   {:redraw true}))))
+                   {:redraw true
+                    :msg {:type :input-changed :id (self :id) :value ""}}))))
 
            :paint
            (fn [self scr rect]

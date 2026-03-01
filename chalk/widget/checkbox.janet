@@ -57,6 +57,7 @@
            :margin margin
            :padding padding
            :dock dock
+           :focusable true
 
            :handle-event
            (fn [self event]
@@ -68,7 +69,9 @@
                  (put state :checked new-val)
                  (when (state :on-change)
                    ((state :on-change) new-val))
-                 {:redraw true})))
+                 {:redraw true
+                  :msg {:type :checkbox-changed :id (self :id)
+                        :checked new-val}})))
 
            :paint
            (fn [self scr rect]

@@ -83,6 +83,7 @@
             (screen/screen-force-redraw scr)
             (when css-text
               (cascade/apply-stylesheet css-text root))
+            (proto/dispatch-event root event)
             (set needs-redraw true))))
 
       (when (and needs-redraw (not quit))
@@ -186,9 +187,10 @@
       ~(fn [,(get params 0)]
          ,;body-code)))
 
-  ~(defn ,name []
+  ~(defn ,name [&named focusable]
      (def w (,proto/make-widget
               ,(string name)
+              :focusable focusable
               :handle-event ,handle-event-code
               :update ,update-code
               :paint ,paint-code
