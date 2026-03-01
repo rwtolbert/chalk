@@ -71,6 +71,67 @@
     ([_] nil))
   modules)
 
+(defn- scan-root-env
+  "Scan root-env and group symbols by prefix (string, math, os, etc.).
+   Returns a package entry for Janet builtins."
+  []
+  (def prefixes @{})
+  (each [k _] (pairs root-env)
+    (def s (string k))
+    (when (and (not (string/has-prefix? "_" s))
+               (not (string/has-prefix? ":" s)))
+      (def idx (string/find "/" s))
+      (def prefix (if idx (string/slice s 0 idx) "core"))
+      (when (> (length prefix) 0)
+        (put prefixes prefix true))))
+  (def modules (sort (keys prefixes)))
+  @{:name "janet" :modules modules :expanded false})
+
+(defn- load-root-env-exports
+  "Load exports from root-env for a given prefix module.
+   prefix 'core' means unprefixed symbols."
+  [mod-name show-private]
+  (def exports @[])
+  (def is-core (= mod-name "core"))
+  (def prefix-slash (if is-core nil (string mod-name "/")))
+
+  (each [k v] (pairs root-env)
+    (def name-str (string k))
+    (def meta (if (table? v) v @{}))
+    (when (and (not (string/has-prefix? "_" name-str))
+               (not (string/has-prefix? ":" name-str))
+               (or show-private (not (get meta :private))))
+      (def has-slash (string/find "/" name-str))
+      (def has-prefix (and has-slash (> has-slash 0)))
+      (def matches
+        (if is-core
+          (not has-prefix)
+          (and prefix-slash (string/has-prefix? prefix-slash name-str))))
+      (when matches
+        (def doc-str (get meta :doc))
+        (def value (or (get meta :value) (get meta :ref)))
+        (def type-str
+          (cond
+            (get meta :macro) "macro"
+            (function? value) "function"
+            (cfunction? value) "cfunction"
+            (fiber? value) "fiber"
+            (number? value) "number"
+            (string? value) "string"
+            (array? value) "array"
+            (table? value) "table"
+            (tuple? value) "tuple"
+            (buffer? value) "buffer"
+            (keyword? value) "keyword"
+            (symbol? value) "symbol"
+            (boolean? value) "boolean"
+            (nil? value) "nil"
+            "value"))
+        (array/push exports @{:name name-str :type type-str :doc doc-str}))))
+
+  (sort-by |($ :name) exports)
+  exports)
+
 (defn- scan-packages
   "Scan syspath for installed packages and their modules."
   []
@@ -96,6 +157,9 @@
                                       :modules modules
                                       :expanded false})))))))
     ([_] nil))
+
+  # Prepend Janet builtins as the first package
+  (array/insert results 0 (scan-root-env))
   results)
 
 (defn- load-module-exports
@@ -105,6 +169,12 @@
   (def cache-key (string pkg-name "/" mod-name (if show-private "/+private" "")))
   (when (get cache cache-key)
     (break (get cache cache-key)))
+
+  # Janet builtins come from root-env, not require
+  (when (= pkg-name "janet")
+    (def exports (load-root-env-exports mod-name show-private))
+    (put cache cache-key exports)
+    (break exports))
 
   (def mod-path (string pkg-name "/" mod-name))
   (def mod-suffix (string "/" pkg-name "/" mod-name ".janet"))
