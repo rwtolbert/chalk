@@ -259,18 +259,28 @@
     (var has-matching-module false)
     (def matching-modules @[])
 
+    # Check if package has an init module (exports exposed at package root)
+    (def has-init (find |(= $ "init") (pkg :modules)))
+
     (each mod-name (pkg :modules)
-      (if filter-text
-        (when (module-exports-match? pkg-name mod-name filter-text exports-cache show-private)
-          (set has-matching-module true)
-          (array/push matching-modules mod-name))
-        (array/push matching-modules mod-name)))
+      (when (not= mod-name "init") # init is shown via package node
+        (if filter-text
+          (when (module-exports-match? pkg-name mod-name filter-text exports-cache show-private)
+            (set has-matching-module true)
+            (array/push matching-modules mod-name))
+          (array/push matching-modules mod-name))))
+
+    # Also match if init module's exports match the filter
+    (when (and filter-text has-init (not has-matching-module))
+      (when (module-exports-match? pkg-name "init" filter-text exports-cache show-private)
+        (set has-matching-module true)))
 
     (when (or (not filter-text) has-matching-module)
       (def expanded (or (pkg :expanded) (and filter-text has-matching-module)))
       (def prefix (if expanded "v " "> "))
       (array/push items (string prefix pkg-name))
-      (array/push tmap @{:type :package :name pkg-name :pkg pkg})
+      (array/push tmap @{:type :package :name pkg-name :pkg pkg
+                         :has-init has-init})
 
       (when expanded
         (each mod-name matching-modules
@@ -638,8 +648,26 @@
                   (def idx (msg :index))
                   (when (< idx (length tree-map))
                     (def entry (get tree-map idx))
-                    (when (= (entry :type) :module)
-                      (select-module self entry)))))
+                    (case (entry :type)
+                      :module
+                      (select-module self entry)
+                      :package
+                      (if (entry :has-init)
+                        (do
+                          (put state :selected-mod
+                               (string (entry :name) "/init"))
+                          (refresh-detail self))
+                        (do
+                          (put state :selected-mod nil)
+                          (def detail-list (proto/find-by-id self "detail-list"))
+                          (when detail-list
+                            (put (detail-list :state) :items @["Select a module to view exports"])
+                            (put (detail-list :state) :item-styles @[nil])
+                            (put (detail-list :state) :selected 0)
+                            (put (detail-list :state) :scroll-offset 0))
+                          (def detail-panel (proto/find-by-id self "detail-panel"))
+                          (when detail-panel
+                            (put (detail-panel :state) :title " Exports "))))))))
 
             # Enter on tree: toggle package expand/collapse or select module
             (on :list-selected [self msg]
