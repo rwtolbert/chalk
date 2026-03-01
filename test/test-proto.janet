@@ -199,4 +199,86 @@
               (= :checkbox-changed ((get msgs 0) :type))
               (= true ((get msgs 0) :checked)))))
 
+# --- Mouse interaction: List ---
+
+(check "list click selects and activates correct item"
+       (let [msgs @[]
+             root (proto/make-widget "root"
+                                     :update (fn [self msg] (array/push msgs msg)))
+             lst (list/list-widget :id "lst" :items @["a" "b" "c" "d"])
+             _ (proto/widget-add-child root lst)
+             _ (proto/build-layout-tree root)]
+         # Fake rects for hit-testing (root must encompass children)
+         (put (root :layout-node) :rect {:row 1 :col 1 :width 20 :height 4})
+         (put (lst :layout-node) :rect {:row 1 :col 1 :width 20 :height 4})
+         # Click on row 3 (0-based offset 2 -> item "c")
+         (proto/dispatch-event root {:type :mouse :button 0 :col 5 :row 3 :action :press})
+         (and (= 1 (length msgs))
+              (= :list-selected ((get msgs 0) :type))
+              (= 2 ((get msgs 0) :index))
+              (= "c" ((get msgs 0) :item))
+              (= 2 (get-in lst [:state :selected])))))
+
+(check "list click with scroll offset selects correct item"
+       (let [msgs @[]
+             root (proto/make-widget "root"
+                                     :update (fn [self msg] (array/push msgs msg)))
+             lst (list/list-widget :id "lst" :items @["a" "b" "c" "d" "e"])
+             _ (proto/widget-add-child root lst)
+             _ (proto/build-layout-tree root)]
+         (put (root :layout-node) :rect {:row 1 :col 1 :width 20 :height 3})
+         (put (lst :layout-node) :rect {:row 1 :col 1 :width 20 :height 3})
+         # Simulate scroll offset of 2 (items "c","d","e" visible)
+         (put (lst :state) :scroll-offset 2)
+         # Click on row 2 (offset 2 + (2 - 1) = 3 -> item "d")
+         (proto/dispatch-event root {:type :mouse :button 0 :col 5 :row 2 :action :press})
+         (and (= 1 (length msgs))
+              (= :list-selected ((get msgs 0) :type))
+              (= 3 ((get msgs 0) :index))
+              (= "d" ((get msgs 0) :item))
+              (= 3 (get-in lst [:state :selected])))))
+
+(check "list scroll wheel navigates selection"
+       (let [msgs @[]
+             root (proto/make-widget "root"
+                                     :update (fn [self msg] (array/push msgs msg)))
+             lst (list/list-widget :id "lst" :items @["a" "b" "c"] :selected 1)
+             _ (proto/widget-add-child root lst)
+             _ (proto/build-layout-tree root)]
+         (put (root :layout-node) :rect {:row 1 :col 1 :width 20 :height 3})
+         (put (lst :layout-node) :rect {:row 1 :col 1 :width 20 :height 3})
+         # Scroll up (button 0) -> selected goes 1 -> 0
+         (proto/dispatch-event root {:type :mouse :button 0 :col 5 :row 2 :action :scroll})
+         (def after-up (get-in lst [:state :selected]))
+         # Scroll down (button 1) -> selected goes 0 -> 1
+         (proto/dispatch-event root {:type :mouse :button 1 :col 5 :row 2 :action :scroll})
+         (def after-down (get-in lst [:state :selected]))
+         (and (= 0 after-up)
+              (= 1 after-down)
+              (= 2 (length msgs)))))
+
+# --- Mouse interaction: Checkbox ---
+
+(check "checkbox click toggles checked state"
+       (let [msgs @[]
+             root (proto/make-widget "root"
+                                     :update (fn [self msg] (array/push msgs msg)))
+             cb (checkbox/checkbox-widget :id "cb" :checked false :label "test")
+             _ (proto/widget-add-child root cb)
+             _ (proto/build-layout-tree root)]
+         (put (root :layout-node) :rect {:row 1 :col 1 :width 10 :height 1})
+         (put (cb :layout-node) :rect {:row 1 :col 1 :width 10 :height 1})
+         # Click to toggle on
+         (proto/dispatch-event root {:type :mouse :button 0 :col 3 :row 1 :action :press})
+         (def checked-after (get-in cb [:state :checked]))
+         # Click again to toggle off
+         (proto/dispatch-event root {:type :mouse :button 0 :col 3 :row 1 :action :press})
+         (def unchecked-after (get-in cb [:state :checked]))
+         (and (= true checked-after)
+              (= false unchecked-after)
+              (= 2 (length msgs))
+              (= :checkbox-changed ((get msgs 0) :type))
+              (= true ((get msgs 0) :checked))
+              (= false ((get msgs 1) :checked)))))
+
 (printf "  %d tests passed" pass)

@@ -670,7 +670,7 @@
                           (when detail-panel
                             (put (detail-panel :state) :title " Exports "))))))))
 
-            # Enter on tree: toggle bundle expand/collapse or select module
+            # Enter/click on tree: toggle bundle expand/collapse or select module
             (on :list-selected [self msg]
                 (when (= (msg :id) "tree-list")
                   (def state (self :state))
@@ -684,7 +684,23 @@
                         (def bdl (entry :bdl))
                         (put bdl :expanded (not (bdl :expanded)))
                         (refresh-tree self)
-                        (refresh-detail self))
+                        # Update detail panel for the bundle
+                        (if (entry :has-init)
+                          (do
+                            (put state :selected-mod
+                                 (string (entry :name) "/init"))
+                            (refresh-detail self))
+                          (do
+                            (put state :selected-mod nil)
+                            (def detail-list (proto/find-by-id self "detail-list"))
+                            (when detail-list
+                              (put (detail-list :state) :items @["Select a module to view exports"])
+                              (put (detail-list :state) :item-styles @[nil])
+                              (put (detail-list :state) :selected 0)
+                              (put (detail-list :state) :scroll-offset 0))
+                            (def detail-panel (proto/find-by-id self "detail-panel"))
+                            (when detail-panel
+                              (put (detail-panel :state) :title " Exports ")))))
 
                       :module
                       (select-module self entry)))))

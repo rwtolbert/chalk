@@ -61,9 +61,21 @@
 
            :handle-event
            (fn [self event]
-             (when (= (event :type) :key)
-               (def k (event :key))
-               (when (or (= k " ") (= k :enter))
+             (case (event :type)
+               :key
+               (let [k (event :key)]
+                 (when (or (= k " ") (= k :enter))
+                   (def state (self :state))
+                   (def new-val (not (state :checked)))
+                   (put state :checked new-val)
+                   (when (state :on-change)
+                     ((state :on-change) new-val))
+                   {:redraw true
+                    :msg {:type :checkbox-changed :id (self :id)
+                          :checked new-val}}))
+
+               :mouse
+               (when (and (= (event :action) :press) (= (event :button) 0))
                  (def state (self :state))
                  (def new-val (not (state :checked)))
                  (put state :checked new-val)

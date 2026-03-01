@@ -48,13 +48,14 @@
 
            :handle-event
            (fn [self event]
-             (when (= (event :type) :key)
-               (def state (self :state))
-               (def items-list (state :items))
-               (def count (length items-list))
-               (when (= count 0) (break nil))
+             (def state (self :state))
+             (def items-list (state :items))
+             (def count (length items-list))
+             (when (= count 0) (break nil))
+             (def sel (state :selected))
 
-               (def sel (state :selected))
+             (case (event :type)
+               :key
                (case (event :key)
                  :up
                  (do
@@ -94,7 +95,36 @@
                      ((state :on-select) sel (get items-list sel)))
                    {:redraw true
                     :msg {:type :list-selected :id (self :id)
-                          :index sel :item (get items-list sel)}}))))
+                          :index sel :item (get items-list sel)}}))
+
+               :mouse
+               (let [action (event :action)
+                     button (event :button)]
+                 (cond
+                   # Click to select and activate
+                   (and (= action :press) (= button 0))
+                   (when-let [node (self :layout-node)
+                              rect (node :rect)]
+                     (def item-idx (+ (state :scroll-offset)
+                                      (- (event :row) (rect :row))))
+                     (when (and (>= item-idx 0) (< item-idx count))
+                       (put state :selected item-idx)
+                       {:redraw true
+                        :msg {:type :list-selected :id (self :id)
+                              :index item-idx
+                              :item (get items-list item-idx)}}))
+
+                   # Scroll wheel
+                   (= action :scroll)
+                   (let [new-sel (if (= button 0)
+                                   (max 0 (- sel 1))
+                                   (min (- count 1) (+ sel 1)))]
+                     (put state :selected new-sel)
+                     (when (< new-sel (state :scroll-offset))
+                       (put state :scroll-offset new-sel))
+                     {:redraw true
+                      :msg {:type :list-changed :id (self :id)
+                            :index new-sel}})))))
 
            :paint
            (fn [self scr rect]
