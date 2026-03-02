@@ -447,6 +447,87 @@
 # App Definition
 # ================================================================
 
+(def app-css `
+  #header {
+    background: blue;
+    color: white;
+    bold: true;
+    dock: top;
+    height: 1;
+  }
+
+  #footer {
+    background: bright-black;
+    color: white;
+    dock: bottom;
+    height: 1;
+  }
+`)
+
+(defn- build-ui []
+  @[# Header
+    (container/container
+      :id "header"
+      :children
+      @[(text/text (string "Janet Bundle Browser - " (dyn *syspath* "."))
+                   :text-align :center :flex-grow 1)])
+
+    # Footer (docked to bottom via CSS)
+    (container/container
+      :id "footer"
+      :flex-direction :row
+      :children
+      @[(text/text " /: search " :width 12)
+        (input/input-widget
+          :id "search-input"
+          :value ""
+          :placeholder "type to filter..."
+          :style {:fg :white}
+          :flex-grow 1
+          :height 1)
+        (text/text " " :width 1)
+        (checkbox/checkbox-widget
+          :id "private-checkbox"
+          :checked false
+          :label "Show private members"
+          :checkbox-style :square
+          :style {:fg :white}
+          :height 1)
+        (text/text "" :flex-grow 1)
+        (text/text " esc: clear | ctrl-c: quit " :width 28)])
+
+    # Main area: side-by-side tree and detail panels
+    (container/container
+      :id "main"
+      :flex-direction :row
+      :flex-grow 1
+      :children
+      @[# Tree panel
+        (border/border
+          (tree/tree-widget
+            :id "tree-list"
+            :nodes @[]
+            :style {:fg :white}
+            :width 30)
+          :id "tree-panel"
+          :border-style :rounded
+          :width 32
+          :title " Bundles (active) "
+          :style {:fg :cyan})
+
+        # Detail panel
+        (border/border
+          (list/list-widget
+            :id "detail-list"
+            :items @["Select a module to view exports"]
+            :style {:fg :white}
+            :flex-grow 1)
+          :id "detail-panel"
+          :border-style :rounded
+          :flex-grow 1
+          :title " Exports "
+          :style {:fg :white})])])
+
 (app/defapp bundle-browser
             (state {:bundles @[]
                     :exports-cache @{}
@@ -454,86 +535,9 @@
                     :search-text ""
                     :show-private false})
 
-            (css `
-    #header {
-      background: blue;
-      color: white;
-      bold: true;
-      dock: top;
-      height: 1;
-    }
+            (css app-css)
 
-    #footer {
-      background: bright-black;
-      color: white;
-      dock: bottom;
-      height: 1;
-    }
-  `)
-
-            (render [self]
-                    @[# Header
-                      (container/container
-                        :id "header"
-                        :children
-                        @[(text/text (string "Janet Bundle Browser - " (dyn *syspath* "."))
-                                     :text-align :center :flex-grow 1)])
-
-                      # Footer (docked to bottom via CSS)
-                      (container/container
-                        :id "footer"
-                        :flex-direction :row
-                        :children
-                        @[(text/text " /: search " :width 12)
-                          (input/input-widget
-                            :id "search-input"
-                            :value ""
-                            :placeholder "type to filter..."
-                            :style {:fg :white}
-                            :flex-grow 1
-                            :height 1)
-                          (text/text " " :width 1)
-                          (checkbox/checkbox-widget
-                            :id "private-checkbox"
-                            :checked false
-                            :label "Show private members"
-                            :checkbox-style :square
-                            :style {:fg :white}
-                            :height 1)
-                          (text/text "" :flex-grow 1)
-                          (text/text " esc: clear | ctrl-c: quit " :width 28)])
-
-                      # Main area: side-by-side tree and detail panels
-                      (container/container
-                        :id "main"
-                        :flex-direction :row
-                        :flex-grow 1
-                        :children
-                        @[# Tree panel
-                          (border/border
-                            (tree/tree-widget
-                              :id "tree-list"
-                              :nodes @[]
-                              :style {:fg :white}
-                              :width 30)
-                            :id "tree-panel"
-                            :border-style :rounded
-                            :width 32
-                            :title " Bundles (active) "
-                            :style {:fg :cyan})
-
-                          # Detail panel
-                          (border/border
-                            (list/list-widget
-                              :id "detail-list"
-                              :items @["Select a module to view exports"]
-                              :style {:fg :white}
-                              :flex-grow 1)
-                            :id "detail-panel"
-                            :border-style :rounded
-                            :flex-grow 1
-                            :title " Exports "
-                            :style {:fg :white})])])
+            (render [self] (build-ui))
 
             (mount [self]
                    (def state (self :state))
