@@ -179,6 +179,44 @@
   (sort-by |($ :name) exports)
   exports)
 
+(defn- static-scan-exports
+  ```Statically extract top-level definitions from a Janet source file.
+   Used as a fallback when require fails (e.g. template files that need
+   a special evaluation context).```
+  [file-path show-private]
+  (def exports @[])
+  (try
+    (do
+      (def src (slurp file-path))
+      (def p (parser/new))
+      (parser/consume p src)
+      (while (parser/has-more p)
+        (def form (parser/produce p))
+        (when (and (tuple? form) (>= (length form) 2) (symbol? (get form 1)))
+          (def head (get form 0))
+          (def [type-str is-private]
+            (case head
+              'def ["value" false]
+              'def- ["value" true]
+              'defn ["function" false]
+              'defn- ["function" true]
+              'defmacro ["macro" false]
+              'defmacro- ["macro" true]
+              'var ["var" false]
+              'var- ["var" true]
+              'varfn ["function" false]
+              'varfn- ["function" true]
+              [nil nil]))
+          (when (and type-str (or show-private (not is-private)))
+            # Docstring is the 3rd element when it's a string and form has 4+ elements
+            (def doc-str
+              (when (and (>= (length form) 4) (string? (get form 2)))
+                (get form 2)))
+            (array/push exports @{:name (string (get form 1))
+                                  :type type-str :doc doc-str})))))
+    ([_] nil))
+  exports)
+
 (defn- load-module-exports
   "Load a module's exports via require. Returns sorted array of export info."
   [bundle-name mod-name cache &opt show-private]
@@ -218,7 +256,14 @@
             (def type-str (classify-value meta value))
             (array/push exports @{:name name-str :type type-str :doc doc-str})))))
     ([err]
-      (array/push exports @{:name "(error loading module)" :type "error" :doc (string err)})))
+      # require failed - fall back to static source scan
+      (def syspath (dyn *syspath* "."))
+      (def file-path (string syspath "/" bundle-name "/" mod-name ".janet"))
+      (def static (static-scan-exports file-path show-private))
+      (if (> (length static) 0)
+        (array/concat exports static)
+        (array/push exports @{:name "(error loading module)" :type "error"
+                              :doc (string err)}))))
 
   (sort-by |($ :name) exports)
   (put cache cache-key exports)
@@ -290,12 +335,17 @@
       (while (and (< indent-len (length text))
                   (= (get text indent-len) (chr " ")))
         (++ indent-len))
+      # Cap indent so forced breaks always make progress
+      (when (>= indent-len max-width)
+        (set indent-len 0))
       (def indent (string/repeat " " indent-len))
       (def lines @[])
       (var remaining text)
       (while (> (length remaining) max-width)
         (var break-at nil)
-        (for i 0 max-width
+        # Only consider spaces past the indent region as break points,
+        # otherwise breaking within the indent makes no forward progress
+        (for i indent-len max-width
           (when (= (get remaining i) (chr " "))
             (set break-at i)))
         (if break-at

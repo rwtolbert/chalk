@@ -1,4 +1,5 @@
-# Layer 1: FFI bindings to libc for terminal control (macOS arm64)
+# Layer 1: FFI bindings to libc for terminal control (POSIX)
+# Supports macOS (arm64/x86_64) and Linux (x86_64)
 
 (ffi/context nil)
 
@@ -14,7 +15,11 @@
 (ffi/defbind write :long [fd :int buf :ptr count :ulong])
 (ffi/defbind poll :int [fds :ptr nfds :uint timeout :int])
 
-# --- termios constants (macOS arm64 / Darwin) ---
+# --- Platform detection ---
+
+(def- os-type (os/which))
+
+# --- termios constants (platform-specific) ---
 
 (def- STDIN-FD 0)
 (def- STDOUT-FD 1)
@@ -22,26 +27,35 @@
 (def- TCSADRAIN 1)
 (def- TCSAFLUSH 2)
 
-# termios struct is 72 bytes on macOS arm64
-# Layout:
-#   c_iflag  :ulong  offset 0   (8 bytes)
-#   c_oflag  :ulong  offset 8   (8 bytes)
-#   c_cflag  :ulong  offset 16  (8 bytes)
-#   c_lflag  :ulong  offset 24  (8 bytes)
-#   c_cc[20] :u8x20  offset 32  (20 bytes)
-#   c_ispeed :ulong  offset 56  (8 bytes)
-#   c_ospeed :ulong  offset 64  (8 bytes)
-(def- TERMIOS-SIZE 72)
+# termios struct layout differs between macOS and Linux:
+#
+# macOS arm64 (72 bytes):
+#   c_iflag  :u64   offset 0    c_oflag  :u64   offset 8
+#   c_cflag  :u64   offset 16   c_lflag  :u64   offset 24
+#   c_cc[20]        offset 32   c_ispeed :u64   offset 56
+#   c_ospeed :u64   offset 64
+#
+# Linux x86_64 (60 bytes):
+#   c_iflag  :u32   offset 0    c_oflag  :u32   offset 4
+#   c_cflag  :u32   offset 8    c_lflag  :u32   offset 12
+#   c_line   :u8    offset 16
+#   c_cc[32]        offset 17   c_ispeed :u32   offset 52
+#   c_ospeed :u32   offset 56
+
+(def- linux? (= os-type :linux))
+
+(def- FLAG-WIDTH (if linux? 4 8))
+(def- TERMIOS-SIZE (if linux? 60 72))
 
 (def- OFF-IFLAG 0)
-(def- OFF-OFLAG 8)
-(def- OFF-CFLAG 16)
-(def- OFF-LFLAG 24)
-(def- OFF-CC 32)
+(def- OFF-OFLAG (if linux? 4 8))
+(def- OFF-CFLAG (if linux? 8 16))
+(def- OFF-LFLAG (if linux? 12 24))
+(def- OFF-CC (if linux? 17 32))
 
 # Input flags (c_iflag)
 (def- ICRNL 0x100)
-(def- IXON 0x200)
+(def- IXON (if linux? 0x400 0x200))
 (def- BRKINT 0x02)
 (def- INPCK 0x10)
 (def- ISTRIP 0x20)
@@ -50,20 +64,20 @@
 (def- OPOST 0x1)
 
 # Control flags (c_cflag)
-(def- CS8 0x300)
+(def- CS8 (if linux? 0x30 0x300))
 
 # Local flags (c_lflag)
 (def- ECHO 0x8)
-(def- ICANON 0x100)
-(def- ISIG 0x80)
-(def- IEXTEN 0x400)
+(def- ICANON (if linux? 0x2 0x100))
+(def- ISIG (if linux? 0x1 0x80))
+(def- IEXTEN (if linux? 0x8000 0x400))
 
 # c_cc indices
-(def- VMIN 16)
-(def- VTIME 17)
+(def- VMIN (if linux? 6 16))
+(def- VTIME (if linux? 5 17))
 
 # ioctl
-(def- TIOCGWINSZ 0x40087468)
+(def- TIOCGWINSZ (if linux? 0x5413 0x40087468))
 
 # winsize struct: 4x unsigned short = 8 bytes
 # { unsigned short ws_row, ws_col, ws_xpixel, ws_ypixel }
@@ -76,31 +90,38 @@
 
 # --- Helpers ---
 
-# Read a little-endian u64 from 8 bytes in buffer
-(defn- read-u64 [buf offset]
-  (var v (int/u64 0))
-  (for i 0 8
-    (set v (bor v (blshift (int/u64 (get buf (+ offset i))) (* i 8)))))
-  v)
+# Read a little-endian unsigned int from buffer (width bytes: 4 or 8)
+(defn- read-flag [buf offset]
+  (if linux?
+    (do
+      (var v (int/u64 0))
+      (for i 0 4
+        (set v (bor v (blshift (int/u64 (get buf (+ offset i))) (* i 8)))))
+      v)
+    (do
+      (var v (int/u64 0))
+      (for i 0 8
+        (set v (bor v (blshift (int/u64 (get buf (+ offset i))) (* i 8)))))
+      v)))
 
-# Write a little-endian u64 into 8 bytes in buffer
-(defn- write-u64 [val buf offset]
+# Write a little-endian unsigned int into buffer (width bytes: 4 or 8)
+(defn- write-flag [val buf offset]
   (def v (int/u64 val))
-  (for i 0 8
+  (for i 0 FLAG-WIDTH
     (def byte-val (band (brshift v (* i 8)) 0xFF))
     (put buf (+ offset i) (int/to-number byte-val))))
 
 (defn- flag-clear [buf offset & flags]
-  (var current (read-u64 buf offset))
+  (var current (read-flag buf offset))
   (each f flags
     (set current (band current (bnot (int/u64 f)))))
-  (write-u64 current buf offset))
+  (write-flag current buf offset))
 
 (defn- flag-set [buf offset & flags]
-  (var current (read-u64 buf offset))
+  (var current (read-flag buf offset))
   (each f flags
     (set current (bor current (int/u64 f))))
-  (write-u64 current buf offset))
+  (write-flag current buf offset))
 
 # --- Public API ---
 
@@ -154,12 +175,14 @@
 (def- O-RDONLY 0)
 
 (defn get-terminal-size
-  "Return [cols rows] of the terminal. Uses stty (avoids ioctl variadic FFI issue on arm64)."
+  "Return [cols rows] of the terminal."
   []
   (def result
     (try
       (do
-        (def proc (os/spawn ["stty" "-f" "/dev/tty" "size"] :p {:out :pipe}))
+        # stty uses -F on Linux, -f on macOS
+        (def flag (if linux? "-F" "-f"))
+        (def proc (os/spawn ["stty" flag "/dev/tty" "size"] :p {:out :pipe}))
         (def out (string (:read (proc :out) :all)))
         (:wait proc)
         (def parts (string/split " " (string/trim out)))
