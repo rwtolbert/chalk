@@ -496,10 +496,11 @@
                           (checkbox/checkbox-widget
                             :id "private-checkbox"
                             :checked false
-                            :label "private"
+                            :label "Show private members"
                             :checkbox-style :square
                             :style {:fg :white}
                             :height 1)
+                          (text/text "" :flex-grow 1)
                           (text/text " esc: clear | ctrl-c: quit " :width 28)])
 
                       # Main area: side-by-side tree and detail panels
