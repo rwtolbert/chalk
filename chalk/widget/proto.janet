@@ -10,6 +10,7 @@
    margin margin-top margin-right margin-bottom margin-left
    padding padding-top padding-right padding-bottom padding-left
    flex-direction flex-grow flex-shrink dock focusable
+   border-style border-color border-title border-title-align
    mount unmount render paint handle-event update]
   @{:type type
     :id id
@@ -42,6 +43,11 @@
     :flex-grow flex-grow
     :flex-shrink flex-shrink
     :dock dock
+    # Border properties
+    :border-style border-style
+    :border-color border-color
+    :border-title border-title
+    :border-title-align border-title-align
     # Lifecycle hooks
     :mount mount
     :unmount unmount
@@ -92,6 +98,12 @@
               :flex-grow (widget :flex-grow)
               :flex-shrink (widget :flex-shrink)
               :dock (widget :dock)))
+  # Reserve space for border by adding 1 to each padding side
+  (when (widget :border-style)
+    (put node :padding-top (+ (node :padding-top) 1))
+    (put node :padding-right (+ (node :padding-right) 1))
+    (put node :padding-bottom (+ (node :padding-bottom) 1))
+    (put node :padding-left (+ (node :padding-left) 1)))
   (put widget :layout-node node)
   (each child (widget :children)
     (def child-node (build-layout-tree child))

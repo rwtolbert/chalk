@@ -16,11 +16,16 @@
 (import chalk/widget/proto)
 (import chalk/widget/text)
 (import chalk/widget/container)
-(import chalk/widget/border)
 (import chalk/widget/list)
 (import chalk/widget/tree)
 (import chalk/widget/input)
 (import chalk/widget/checkbox)
+
+# --- Widget IDs (single source of truth) ---
+(def ID-TREE "tree-panel")
+(def ID-DETAIL "detail-panel")
+(def ID-SEARCH "search-input")
+(def ID-CHECKBOX "private-checkbox")
 
 # ================================================================
 # Data Layer: Module Discovery & Introspection
@@ -384,14 +389,15 @@
       (array/push styles color)
       (when (exp :doc)
         (def doc-lines (string/split "\n" (exp :doc)))
+        (def is-multiline (> (length doc-lines) 1))
         (each line doc-lines
           (def prefixed (string "  " line))
-          (if (> (length prefixed) wrap-width)
-            # Long line: word-wrap it
+          (if (and (not is-multiline) (> (length prefixed) wrap-width))
+            # Single-line doc that's too long: word-wrap it
             (each wl (wrap-line prefixed wrap-width)
               (array/push items wl)
               (array/push styles nil))
-            # Short line: output as-is (preserves developer formatting)
+            # Multi-line doc or short line: preserve author formatting
             (do
               (array/push items prefixed)
               (array/push styles nil)))))
@@ -416,30 +422,24 @@
   (def exports (load-module-exports bundle-name mod-name exports-cache show-private))
   (def [di ds] (build-detail-items exports search-text))
 
-  (def detail-list (proto/find-by-id self "detail-list"))
-  (when detail-list
-    (put (detail-list :state) :items di)
-    (put (detail-list :state) :item-styles ds)
-    (put (detail-list :state) :selected 0)
-    (put (detail-list :state) :scroll-offset 0))
-
-  # Update detail panel title
-  (def detail-panel (proto/find-by-id self "detail-panel"))
+  (def detail-panel (proto/find-by-id self ID-DETAIL))
   (when detail-panel
-    (put (detail-panel :state) :title (string " " selected-mod " "))))
+    (put (detail-panel :state) :items di)
+    (put (detail-panel :state) :item-styles ds)
+    (put (detail-panel :state) :selected 0)
+    (put (detail-panel :state) :scroll-offset 0)
+    (put detail-panel :border-title (string " " selected-mod " "))))
 
 (defn- clear-detail [self]
   (def state (self :state))
   (put state :selected-mod nil)
-  (def detail-list (proto/find-by-id self "detail-list"))
-  (when detail-list
-    (put (detail-list :state) :items @["Select a module to view exports"])
-    (put (detail-list :state) :item-styles @[nil])
-    (put (detail-list :state) :selected 0)
-    (put (detail-list :state) :scroll-offset 0))
-  (def detail-panel (proto/find-by-id self "detail-panel"))
+  (def detail-panel (proto/find-by-id self ID-DETAIL))
   (when detail-panel
-    (put (detail-panel :state) :title " Exports ")))
+    (put (detail-panel :state) :items @["Select a module to view exports"])
+    (put (detail-panel :state) :item-styles @[nil])
+    (put (detail-panel :state) :selected 0)
+    (put (detail-panel :state) :scroll-offset 0)
+    (put detail-panel :border-title " Exports ")))
 
 (defn- show-node-detail [self node]
   "Update the detail panel based on the currently hovered/selected tree node."
@@ -461,32 +461,32 @@
   (def state (self :state))
   (def selected-mod (state :selected-mod))
 
-  (def tree-panel (proto/find-by-id self "tree-panel"))
+  (def tree-panel (proto/find-by-id self ID-TREE))
   (when tree-panel
-    (def active (= focused-id "tree-list"))
-    (put tree-panel :style (if active {:fg :cyan} {:fg :white}))
-    (put (tree-panel :state) :title
+    (def active (= focused-id ID-TREE))
+    (put tree-panel :border-color (if active :cyan :white))
+    (put tree-panel :border-title
          (if active " Bundles (active) " " Bundles ")))
 
-  (def detail-panel (proto/find-by-id self "detail-panel"))
+  (def detail-panel (proto/find-by-id self ID-DETAIL))
   (when detail-panel
-    (def active (= focused-id "detail-list"))
-    (put detail-panel :style (if active {:fg :cyan} {:fg :white}))
+    (def active (= focused-id ID-DETAIL))
+    (put detail-panel :border-color (if active :cyan :white))
     (def base-title (if selected-mod
                       (string " " selected-mod " ")
                       " Exports "))
-    (put (detail-panel :state) :title
+    (put detail-panel :border-title
          (if active (string base-title "(active) ") base-title)))
 
-  (def cb (proto/find-by-id self "private-checkbox"))
+  (def cb (proto/find-by-id self ID-CHECKBOX))
   (when cb
-    (put cb :style (if (= focused-id "private-checkbox")
+    (put cb :style (if (= focused-id ID-CHECKBOX)
                      {:fg :cyan}
                      {:fg :white}))))
 
 (defn- sync-after-filter [self]
   "After a filter change, update detail panel from tree's current selection."
-  (def tree-list (proto/find-by-id self "tree-list"))
+  (def tree-list (proto/find-by-id self ID-TREE))
   (when tree-list
     (def selected (tree/tree-selected-node tree-list))
     (if selected
@@ -529,7 +529,7 @@
       :children
       @[(text/text " /: search " :width 12)
         (input/input-widget
-          :id "search-input"
+          :id ID-SEARCH
           :value ""
           :placeholder "type to filter..."
           :style {:fg :white}
@@ -537,7 +537,7 @@
           :height 1)
         (text/text " " :width 1)
         (checkbox/checkbox-widget
-          :id "private-checkbox"
+          :id ID-CHECKBOX
           :checked false
           :label "Show private members"
           :checkbox-style :square
@@ -552,34 +552,28 @@
       :flex-direction :row
       :flex-grow 1
       :children
-      @[# Tree panel
-        (border/border
-          (tree/tree-widget
-            :id "tree-list"
-            :nodes @[]
-            :indent 2
-            :auto-expand true
-            :max-width 40
-            :style {:fg :white}
-            :width 30)
-          :id "tree-panel"
-          :border-style :rounded
+      @[# Tree panel (border as property)
+        (tree/tree-widget
+          :id ID-TREE
+          :nodes @[]
+          :indent 2
+          :auto-expand true
+          :max-width 40
+          :style {:fg :white}
           :width 32
-          :title " Bundles (active) "
-          :style {:fg :cyan})
-
-        # Detail panel
-        (border/border
-          (list/list-widget
-            :id "detail-list"
-            :items @["Select a module to view exports"]
-            :style {:fg :white}
-            :flex-grow 1)
-          :id "detail-panel"
           :border-style :rounded
+          :border-color :cyan
+          :border-title " Bundles (active) ")
+
+        # Detail panel (border as property)
+        (list/list-widget
+          :id ID-DETAIL
+          :items @["Select a module to view exports"]
+          :style {:fg :white}
           :flex-grow 1
-          :title " Exports "
-          :style {:fg :white})])])
+          :border-style :rounded
+          :border-color :white
+          :border-title " Exports ")])])
 
 (app/defapp bundle-browser
             (state {:bundles @[]
@@ -598,15 +592,15 @@
                    (put state :bundles bundles)
                    (put state :exports-cache @{})
                    (def nodes (bundles-to-tree-nodes bundles))
-                   (def tree-list (proto/find-by-id self "tree-list"))
-                   (when tree-list
-                     (tree/tree-set-nodes tree-list nodes))
+                   (def tree-panel (proto/find-by-id self ID-TREE))
+                   (when tree-panel
+                     (tree/tree-set-nodes tree-panel nodes))
 
-                   # Set initial focus on tree-list
+                   # Set initial focus on tree-panel
                    (def fs (proto/init-focus self))
-                   (when tree-list
-                     (proto/set-focus fs tree-list))
-                   (update-focus-indicators self "tree-list"))
+                   (when tree-panel
+                     (proto/set-focus fs tree-panel))
+                   (update-focus-indicators self ID-TREE))
 
             # --- Global key handler (fallback when focused widget doesn't consume) ---
             (on :key [self event]
@@ -616,10 +610,10 @@
                   (= k "/")
                   (do
                     (def fs (self :focus-state))
-                    (def search-input (proto/find-by-id self "search-input"))
+                    (def search-input (proto/find-by-id self ID-SEARCH))
                     (when (and fs search-input)
                       (proto/set-focus fs search-input)
-                      (update-focus-indicators self "search-input"))
+                      (update-focus-indicators self ID-SEARCH))
                     {:redraw true})
 
                   # escape: clear search and return to tree
@@ -627,67 +621,67 @@
                   (do
                     (def state (self :state))
                     (put state :search-text "")
-                    (def search-input (proto/find-by-id self "search-input"))
+                    (def search-input (proto/find-by-id self ID-SEARCH))
                     (when search-input
                       (put (search-input :state) :value "")
                       (put (search-input :state) :cursor-pos 0))
-                    (def tree-list (proto/find-by-id self "tree-list"))
-                    (when tree-list
-                      (tree/tree-set-filter tree-list nil))
+                    (def tree-panel (proto/find-by-id self ID-TREE))
+                    (when tree-panel
+                      (tree/tree-set-filter tree-panel nil))
 
                     (refresh-detail self "")
                     (def fs (self :focus-state))
-                    (when (and fs tree-list)
-                      (proto/set-focus fs tree-list)
-                      (update-focus-indicators self "tree-list"))
+                    (when (and fs tree-panel)
+                      (proto/set-focus fs tree-panel)
+                      (update-focus-indicators self ID-TREE))
                     {:redraw true})))
 
             # --- Message handlers ---
 
             # Tree cursor moved - auto-load hovered node's exports
             (on :tree-changed [self msg]
-                (when (= (msg :id) "tree-list")
+                (when (= (msg :id) ID-TREE)
                   (show-node-detail self (msg :node))))
 
             # Branch expand/collapse toggled
             (on :tree-node-toggled [self msg]
-                (when (= (msg :id) "tree-list")
+                (when (= (msg :id) ID-TREE)
 
                   (show-node-detail self (msg :node))))
 
             # Leaf node selected (enter/click on module)
             (on :tree-node-selected [self msg]
-                (when (= (msg :id) "tree-list")
+                (when (= (msg :id) ID-TREE)
                   (show-node-detail self (msg :node))))
 
             # Search text changed: filter tree in real-time
             (on :input-changed [self msg]
-                (when (= (msg :id) "search-input")
+                (when (= (msg :id) ID-SEARCH)
                   (def state (self :state))
                   (put state :search-text (msg :value))
-                  (def tree-list (proto/find-by-id self "tree-list"))
-                  (when tree-list
+                  (def tree-panel (proto/find-by-id self ID-TREE))
+                  (when tree-panel
                     (if (> (length (msg :value)) 0)
-                      (tree/tree-set-filter tree-list
+                      (tree/tree-set-filter tree-panel
                                             (make-search-filter (msg :value)
                                                                 (state :exports-cache)
                                                                 (state :show-private)))
-                      (tree/tree-set-filter tree-list nil)))
+                      (tree/tree-set-filter tree-panel nil)))
 
                   (sync-after-filter self)))
 
             # Enter in search: focus back to tree
             (on :input-submitted [self msg]
-                (when (= (msg :id) "search-input")
+                (when (= (msg :id) ID-SEARCH)
                   (def fs (self :focus-state))
-                  (def tree-list (proto/find-by-id self "tree-list"))
-                  (when (and fs tree-list)
-                    (proto/set-focus fs tree-list)
-                    (update-focus-indicators self "tree-list"))))
+                  (def tree-panel (proto/find-by-id self ID-TREE))
+                  (when (and fs tree-panel)
+                    (proto/set-focus fs tree-panel)
+                    (update-focus-indicators self ID-TREE))))
 
             # Toggle show-private: invalidate cache, refresh
             (on :checkbox-changed [self msg]
-                (when (= (msg :id) "private-checkbox")
+                (when (= (msg :id) ID-CHECKBOX)
                   (def state (self :state))
                   (put state :show-private (msg :checked))
                   # Invalidate exports cache
@@ -695,10 +689,10 @@
                   (each ck (keys exports-cache)
                     (put exports-cache ck nil))
                   # Re-apply filter if active
-                  (def tree-list (proto/find-by-id self "tree-list"))
+                  (def tree-panel (proto/find-by-id self ID-TREE))
                   (def search-text (state :search-text))
-                  (when (and tree-list (> (length search-text) 0))
-                    (tree/tree-set-filter tree-list
+                  (when (and tree-panel (> (length search-text) 0))
+                    (tree/tree-set-filter tree-panel
                                           (make-search-filter search-text
                                                               exports-cache
                                                               (msg :checked))))

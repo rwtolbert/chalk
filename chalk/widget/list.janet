@@ -28,7 +28,8 @@
    selected: initial selected index (default 0)
    on-select: callback (fn [index item]) called on enter```
   [&named items item-styles selected on-select id classes style
-   width height flex-grow flex-shrink margin padding dock]
+   width height flex-grow flex-shrink margin padding dock
+   border-style border-color border-title border-title-align]
   (default items @[])
   (default selected 0)
 
@@ -44,6 +45,10 @@
            :margin margin
            :padding padding
            :dock dock
+           :border-style border-style
+           :border-color border-color
+           :border-title border-title
+           :border-title-align border-title-align
            :focusable true
 
            :handle-event
@@ -104,7 +109,7 @@
                    # Click to select and activate
                    (and (= action :press) (= button 0))
                    (when-let [node (self :layout-node)
-                              rect (node :rect)]
+                              rect (or (self :content-rect) (node :rect))]
                      (def item-idx (+ (state :scroll-offset)
                                       (- (event :row) (rect :row))))
                      (when (and (>= item-idx 0) (< item-idx count))

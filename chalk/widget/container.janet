@@ -25,7 +25,8 @@
 (defn container
   "Create a container widget. Children are added via widget-add-child."
   [&named id classes style flex-direction width height flex-grow flex-shrink
-   margin padding dock children]
+   margin padding dock children
+   border-style border-color border-title border-title-align]
   (def w (proto/make-widget
            "container"
            :id id
@@ -39,6 +40,10 @@
            :margin margin
            :padding padding
            :dock dock
+           :border-style border-style
+           :border-color border-color
+           :border-title border-title
+           :border-title-align border-title-align
            :paint
            (fn [self scr rect]
              (def effective (resolve-effective-style self))

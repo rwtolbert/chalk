@@ -107,6 +107,11 @@
     "padding-bottom" [:padding-bottom (or (scan-number value-str) 0)]
     "padding-left" [:padding-left (or (scan-number value-str) 0)]
 
+    # Border properties
+    "border-style" [:border-style (keyword (string/trim value-str))]
+    "border-color" [:border-color (parse-color value-str)]
+    "border-title-align" [:border-title-align (keyword (string/trim value-str))]
+
     nil))
 
 (def- style-keys
@@ -116,7 +121,8 @@
   [:width :height :min-width :max-width :min-height :max-height
    :flex-direction :flex-grow :flex-shrink :dock
    :margin :margin-top :margin-right :margin-bottom :margin-left
-   :padding :padding-top :padding-right :padding-bottom :padding-left])
+   :padding :padding-top :padding-right :padding-bottom :padding-left
+   :border-style :border-color :border-title-align])
 
 (defn declarations-to-props
   "Convert an array of {:property :value} declarations to {:style-props {...} :layout-props {...}}."

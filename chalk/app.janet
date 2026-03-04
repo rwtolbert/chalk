@@ -187,10 +187,15 @@
       ~(fn [,(get params 0)]
          ,;body-code)))
 
-  ~(defn ,name [&named focusable]
+  ~(defn ,name [&named focusable
+                border-style border-color border-title border-title-align]
      (def w (,proto/make-widget
               ,(string name)
               :focusable focusable
+              :border-style border-style
+              :border-color border-color
+              :border-title border-title
+              :border-title-align border-title-align
               :handle-event ,handle-event-code
               :update ,update-code
               :paint ,paint-code

@@ -9,7 +9,6 @@
 (import ../chalk/widget/proto)
 (import ../chalk/widget/text)
 (import ../chalk/widget/container)
-(import ../chalk/widget/border)
 (import ../chalk/widget/list)
 (import ../chalk/widget/input)
 (import ../chalk/widget/render)
@@ -76,10 +75,13 @@
                    :height 1))
 
     (def todo-list (list/list-widget
-                     :id "todo-list-inner"
+                     :id "todo-list"
                      :items (map format-todo todos)
                      :style {:fg :white}
-                     :flex-grow 1))
+                     :flex-grow 1
+                     :border-style :single
+                     :border-color (if (= focus :list) :cyan :white)
+                     :border-title (if (= focus :list) " Todos (active) " " Todos ")))
 
     (def root
       (container/container
@@ -114,19 +116,15 @@
                 :flex-grow 1
                 :children
                 @[# Input area with border
-                  (border/border
-                    (container/container
-                      :children @[input-w])
+                  (container/container
                     :id "input-area"
-                    :title (if (= focus :input) " New Todo (active) " " New Todo ")
-                    :style (if (= focus :input) {:fg :cyan} {:fg :white}))
+                    :children @[input-w]
+                    :border-style :single
+                    :border-color (if (= focus :input) :cyan :white)
+                    :border-title (if (= focus :input) " New Todo (active) " " New Todo "))
 
                   # Todo list with border
-                  (border/border
-                    todo-list
-                    :id "todo-list"
-                    :title (if (= focus :list) " Todos (active) " " Todos ")
-                    :style (if (= focus :list) {:fg :cyan} {:fg :white}))])
+                  todo-list])
 
               # Help panel
               (container/container

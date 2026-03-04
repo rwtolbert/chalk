@@ -115,7 +115,8 @@
     (def content-w (compute-content-width state))
     (def min-w (state :min-width))
     (def max-w (state :max-width))
-    (def desired (+ content-w 2))
+    (def border-extra (if (widget :border-style) 2 0))
+    (def desired (+ content-w 2 border-extra))
     (def new-w (max min-w (if max-w (min desired max-w) desired)))
     (def old-w (widget :width))
     (put widget :width new-w)
@@ -144,7 +145,8 @@
    max-width: upper bound on width when auto-expand is on (default nil = no limit)```
   [&named nodes indent expanded-prefix collapsed-prefix leaf-prefix
    initially-expanded filter-fn on-select auto-expand max-width
-   id classes style width height flex-grow flex-shrink margin padding dock]
+   id classes style width height flex-grow flex-shrink margin padding dock
+   border-style border-color border-title border-title-align]
   (default nodes @[])
   (default indent 4)
   (default expanded-prefix "v ")
@@ -165,6 +167,10 @@
            :margin margin
            :padding padding
            :dock dock
+           :border-style border-style
+           :border-color border-color
+           :border-title border-title
+           :border-title-align border-title-align
            :focusable true
 
            :handle-event
@@ -269,7 +275,7 @@
                    # Click to select/toggle
                    (and (= action :press) (= button 0))
                    (when-let [node (self :layout-node)
-                              rect (node :rect)]
+                              rect (or (self :content-rect) (node :rect))]
                      (def item-idx (+ (state :scroll-offset)
                                       (- (event :row) (rect :row))))
                      (when (and (>= item-idx 0) (< item-idx count))
