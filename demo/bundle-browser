@@ -557,6 +557,9 @@
           (tree/tree-widget
             :id "tree-list"
             :nodes @[]
+            :indent 2
+            :auto-expand true
+            :max-width 40
             :style {:fg :white}
             :width 30)
           :id "tree-panel"
@@ -598,6 +601,7 @@
                    (def tree-list (proto/find-by-id self "tree-list"))
                    (when tree-list
                      (tree/tree-set-nodes tree-list nodes))
+
                    # Set initial focus on tree-list
                    (def fs (proto/init-focus self))
                    (when tree-list
@@ -630,6 +634,7 @@
                     (def tree-list (proto/find-by-id self "tree-list"))
                     (when tree-list
                       (tree/tree-set-filter tree-list nil))
+
                     (refresh-detail self "")
                     (def fs (self :focus-state))
                     (when (and fs tree-list)
@@ -647,6 +652,7 @@
             # Branch expand/collapse toggled
             (on :tree-node-toggled [self msg]
                 (when (= (msg :id) "tree-list")
+
                   (show-node-detail self (msg :node))))
 
             # Leaf node selected (enter/click on module)
@@ -667,6 +673,7 @@
                                                                 (state :exports-cache)
                                                                 (state :show-private)))
                       (tree/tree-set-filter tree-list nil)))
+
                   (sync-after-filter self)))
 
             # Enter in search: focus back to tree
@@ -695,6 +702,7 @@
                                           (make-search-filter search-text
                                                               exports-cache
                                                               (msg :checked))))
+
                   (refresh-detail self)))
 
             # Focus changed: update border styles and titles

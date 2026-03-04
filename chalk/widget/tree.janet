@@ -86,6 +86,50 @@
     (when (>= (state :selected) count)
       (put state :selected (- count 1)))))
 
+(defn- compute-content-width
+  "Compute max display string length across all visible flat entries."
+  [state]
+  (def flat (state :flat))
+  (def indent-size (state :indent))
+  (def exp-prefix (state :expanded-prefix))
+  (def col-prefix (state :collapsed-prefix))
+  (def lf-prefix (state :leaf-prefix))
+  (var max-w 0)
+  (each entry flat
+    (def depth (entry :depth))
+    (def prefix (if (entry :is-branch)
+                  (if (entry :expanded) exp-prefix col-prefix)
+                  lf-prefix))
+    (def label (or ((entry :node) :label) ""))
+    (def w (+ (* depth indent-size) (length prefix) (length label)))
+    (when (> w max-w) (set max-w w)))
+  max-w)
+
+(defn- rebuild-and-resize
+  "Rebuild flat list, then auto-resize width if enabled.
+   Propagates size changes up through fixed-width ancestors."
+  [widget]
+  (def state (widget :state))
+  (rebuild-flat state)
+  (when (state :auto-expand)
+    (def content-w (compute-content-width state))
+    (def min-w (state :min-width))
+    (def max-w (state :max-width))
+    (def desired (+ content-w 2))
+    (def new-w (max min-w (if max-w (min desired max-w) desired)))
+    (def old-w (widget :width))
+    (put widget :width new-w)
+    # Propagate size delta to fixed-width ancestors
+    (when (and (number? old-w) (not= new-w old-w))
+      (def delta (- new-w old-w))
+      (var p (widget :parent))
+      (while p
+        (if (number? (p :width))
+          (do
+            (put p :width (+ (p :width) delta))
+            (set p (p :parent)))
+          (break))))))
+
 (defn tree-widget
   ```Create a tree widget for hierarchical data.
    nodes: array of node tables, each with :label (string), optional :children and :data
@@ -95,9 +139,11 @@
    leaf-prefix: prefix for leaf nodes (default "  ")
    initially-expanded: array of node refs to start expanded (default @[])
    filter-fn: (fn [node] bool) or nil for show-all
-   on-select: callback (fn [index node])```
+   on-select: callback (fn [index node])
+   auto-expand: when true, widget width adjusts to fit content (default false)
+   max-width: upper bound on width when auto-expand is on (default nil = no limit)```
   [&named nodes indent expanded-prefix collapsed-prefix leaf-prefix
-   initially-expanded filter-fn on-select
+   initially-expanded filter-fn on-select auto-expand max-width
    id classes style width height flex-grow flex-shrink margin padding dock]
   (default nodes @[])
   (default indent 4)
@@ -105,6 +151,7 @@
   (default collapsed-prefix "> ")
   (default leaf-prefix "  ")
   (default initially-expanded @[])
+  (default auto-expand false)
 
   (def w (proto/make-widget
            "tree"
@@ -182,7 +229,7 @@
                        (if was-expanded
                          (put expanded-set node nil)
                          (put expanded-set node true))
-                       (rebuild-flat state)
+                       (rebuild-and-resize self)
                        {:redraw true
                         :msg {:type :tree-node-toggled :id (self :id)
                               :node node :expanded (not was-expanded)}})
@@ -204,7 +251,7 @@
                        (if was-expanded
                          (put expanded-set node nil)
                          (put expanded-set node true))
-                       (rebuild-flat state)
+                       (rebuild-and-resize self)
                        {:redraw true
                         :msg {:type :tree-node-toggled :id (self :id)
                               :node node :expanded (not was-expanded)}})
@@ -236,7 +283,7 @@
                            (if was-expanded
                              (put expanded-set tnode nil)
                              (put expanded-set tnode true))
-                           (rebuild-flat state)
+                           (rebuild-and-resize self)
                            {:redraw true
                             :msg {:type :tree-node-toggled :id (self :id)
                                   :node tnode :expanded (not was-expanded)}})
@@ -307,10 +354,14 @@
                    # Clear the line
                    (for c (rect :col) (+ (rect :col) (rect :width))
                      (screen/screen-put scr c row " " s))
-                   # Draw display text, clipped
-                   (def clipped (if (> (length display) (rect :width))
-                                  (string/slice display 0 (rect :width))
-                                  display))
+                   # Draw display text, clipped with elision
+                   (def available (rect :width))
+                   (def clipped
+                     (if (> (length display) available)
+                       (if (> available 3)
+                         (string (string/slice display 0 (- available 3)) "...")
+                         (string/slice display 0 (max available 0)))
+                       display))
                    (screen/screen-put-string scr (rect :col) row
                                              (string " " clipped) s))
                  # Clear empty rows below items
@@ -333,9 +384,12 @@
   (put (w :state) :collapsed-prefix collapsed-prefix)
   (put (w :state) :leaf-prefix leaf-prefix)
   (put (w :state) :on-select on-select)
+  (put (w :state) :auto-expand auto-expand)
+  (put (w :state) :max-width max-width)
+  (put (w :state) :min-width (if (number? width) width 10))
 
   # Build initial flat list
-  (rebuild-flat (w :state))
+  (rebuild-and-resize w)
 
   w)
 
@@ -349,28 +403,28 @@
   (put state :expanded-set @{})
   (put state :selected 0)
   (put state :scroll-offset 0)
-  (rebuild-flat state))
+  (rebuild-and-resize widget))
 
 (defn tree-set-filter
   "Set or clear the filter function. nil = show all."
   [widget filter-fn]
   (def state (widget :state))
   (put state :filter-fn filter-fn)
-  (rebuild-flat state))
+  (rebuild-and-resize widget))
 
 (defn tree-expand-node
   "Expand a specific node."
   [widget node]
   (def state (widget :state))
   (put (state :expanded-set) node true)
-  (rebuild-flat state))
+  (rebuild-and-resize widget))
 
 (defn tree-collapse-node
   "Collapse a specific node."
   [widget node]
   (def state (widget :state))
   (put (state :expanded-set) node nil)
-  (rebuild-flat state))
+  (rebuild-and-resize widget))
 
 (defn tree-selected-node
   "Get the currently selected node, or nil if empty."
@@ -392,3 +446,8 @@
       (put state :selected i)
       (set found true)))
   found)
+
+(defn tree-content-width
+  "Get the computed content width (max display length across visible entries)."
+  [widget]
+  (compute-content-width (widget :state)))

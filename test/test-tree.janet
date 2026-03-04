@@ -307,4 +307,76 @@
          (and (= 2 (length (get-in w [:state :flat])))
               (= 1 (get-in w [:state :selected])))))
 
+# --- 19. Auto-expand sets width based on content ---
+
+(check "auto-expand sets width based on content"
+       (let [leaf-a @{:label "short" :data {:id "a"}}
+             leaf-b @{:label "a-longer-label-here" :data {:id "b"}}
+             branch @{:label "root" :children @[leaf-a leaf-b] :data {:id "r"}}
+             w (tree/tree-widget :nodes @[branch] :width 10
+                                 :auto-expand true
+                                 :initially-expanded @[branch])]
+         # Content: "root" with "> " prefix = 6 chars at depth 0
+         #          "short" with "  " prefix = 7 + indent at depth 1
+         #          "a-longer-label-here" with "  " prefix = 21 + indent at depth 1
+         # Longest is 21 + 4 (default indent) = 25, desired = 25 + 2 = 27
+         (and (> (w :width) 10)
+              (= (w :width) 27))))
+
+# --- 20. Auto-expand respects max-width ---
+
+(check "auto-expand respects max-width"
+       (let [leaf @{:label "a-very-long-label-that-exceeds-max" :data {:id "a"}}
+             branch @{:label "root" :children @[leaf] :data {:id "r"}}
+             w (tree/tree-widget :nodes @[branch] :width 10
+                                 :auto-expand true :max-width 20
+                                 :initially-expanded @[branch])]
+         (<= (w :width) 20)))
+
+# --- 21. Auto-expand does not go below initial width ---
+
+(check "auto-expand does not shrink below initial width"
+       (let [leaf @{:label "x" :data {:id "a"}}
+             w (tree/tree-widget :nodes @[leaf] :width 30
+                                 :auto-expand true)]
+         # "x" with "  " prefix = 3 chars, desired = 5. But min-width is 30.
+         (= (w :width) 30)))
+
+# --- 22. Auto-expand updates on expand/collapse ---
+
+(check "auto-expand updates width on expand"
+       (let [leaf @{:label "a-long-child-name" :data {:id "a"}}
+             branch @{:label "b" :children @[leaf] :data {:id "r"}}
+             w (tree/tree-widget :nodes @[branch] :width 10
+                                 :auto-expand true)]
+         (def before (w :width))
+         (tree/tree-expand-node w branch)
+         (def after (w :width))
+         # After expanding, width should grow to fit the child
+         (> after before)))
+
+# --- 23. tree-content-width returns correct value ---
+
+(check "tree-content-width returns correct value"
+       (let [leaf @{:label "hello" :data {:id "a"}}
+             w (tree/tree-widget :nodes @[leaf])]
+         # "hello" with leaf prefix "  " = 7 chars at depth 0
+         (= 7 (tree/tree-content-width w))))
+
+# --- 24. Auto-expand propagates width delta to fixed-width ancestors ---
+
+(check "auto-expand propagates width delta to parent"
+       (let [leaf @{:label "a-long-child-name" :data {:id "a"}}
+             branch @{:label "b" :children @[leaf] :data {:id "r"}}
+             w (tree/tree-widget :nodes @[branch] :width 10
+                                 :auto-expand true)
+             parent (proto/make-widget "border" :width 12)]
+         (proto/widget-add-child parent w)
+         # Expand: tree grows, parent should grow by the same delta
+         (def parent-before (parent :width))
+         (tree/tree-expand-node w branch)
+         (def parent-after (parent :width))
+         (def tree-delta (- (w :width) 10))
+         (= parent-after (+ parent-before tree-delta))))
+
 (printf "  %d tests passed" pass)
