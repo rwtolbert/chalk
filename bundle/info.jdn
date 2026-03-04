@@ -1,6 +1,7 @@
 @{:name "chalk"
   :description "A pure Janet TUI library inspired by Python's Textual"
   :author "Bob Tolbert"
+  :version "0.2.0"
   :license "MIT"
   :dependencies []
   :url "https://github.com/rwtolbert/chalk"
