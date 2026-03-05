@@ -390,14 +390,18 @@
       (when (exp :doc)
         (def doc-lines (string/split "\n" (exp :doc)))
         (def is-multiline (> (length doc-lines) 1))
+        (var first-line true)
         (each line doc-lines
           (def prefixed (string "  " line))
-          (if (and (not is-multiline) (> (length prefixed) wrap-width))
-            # Single-line doc that's too long: word-wrap it
+          # Auto-generated signature lines start with ( and are safe to wrap
+          (def is-signature (and first-line (string/has-prefix? "  (" prefixed)))
+          (set first-line false)
+          (if (and (> (length prefixed) wrap-width)
+                   (or is-signature (not is-multiline)))
             (each wl (wrap-line prefixed wrap-width)
               (array/push items wl)
               (array/push styles nil))
-            # Multi-line doc or short line: preserve author formatting
+            # Author-formatted line: preserve as-is
             (do
               (array/push items prefixed)
               (array/push styles nil)))))
