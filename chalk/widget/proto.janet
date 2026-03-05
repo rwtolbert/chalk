@@ -250,9 +250,9 @@
           (set fw (fw :parent)))
         (when (and fw (not= fw (focused-widget fs)))
           (set-focus fs fw)
-          (set result {:redraw true
-                       :msg {:type :focus-changed
-                             :widget-id (fw :id)}})))
+          (set result @{:redraw true
+                        :msg {:type :focus-changed
+                              :widget-id (fw :id)}})))
       (when (and target (target :handle-event))
         (def handler-result ((target :handle-event) target event))
         (when handler-result

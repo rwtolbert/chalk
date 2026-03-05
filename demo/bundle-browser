@@ -9,6 +9,7 @@
 #   enter / space     expand bundle or select module
 #   /                 jump to search input
 #   escape            clear search, return to tree
+#   ctrl-p            toggle show private members
 #   j/k / up/down     navigate lists
 
 # --- Chalk Imports ---
@@ -498,6 +499,78 @@
       (clear-detail self))))
 
 # ================================================================
+# Event Handlers
+# ================================================================
+
+(defn- handle-search-shortcut [self]
+  (def fs (self :focus-state))
+  (def search-input (proto/find-by-id self ID-SEARCH))
+  (when (and fs search-input)
+    (proto/set-focus fs search-input)
+    (update-focus-indicators self ID-SEARCH))
+  {:redraw true})
+
+(defn- handle-escape [self]
+  (def state (self :state))
+  (put state :search-text "")
+  (def search-input (proto/find-by-id self ID-SEARCH))
+  (when search-input
+    (put (search-input :state) :value "")
+    (put (search-input :state) :cursor-pos 0))
+  (def tree-panel (proto/find-by-id self ID-TREE))
+  (when tree-panel
+    (tree/tree-set-filter tree-panel nil))
+  (refresh-detail self "")
+  (def fs (self :focus-state))
+  (when (and fs tree-panel)
+    (proto/set-focus fs tree-panel)
+    (update-focus-indicators self ID-TREE))
+  {:redraw true})
+
+(defn- handle-input-changed [self msg]
+  (def state (self :state))
+  (put state :search-text (msg :value))
+  (def tree-panel (proto/find-by-id self ID-TREE))
+  (when tree-panel
+    (if (> (length (msg :value)) 0)
+      (tree/tree-set-filter tree-panel
+                            (make-search-filter (msg :value)
+                                                (state :exports-cache)
+                                                (state :show-private)))
+      (tree/tree-set-filter tree-panel nil)))
+  (sync-after-filter self))
+
+(defn- handle-input-submitted [self]
+  (def fs (self :focus-state))
+  (def tree-panel (proto/find-by-id self ID-TREE))
+  (when (and fs tree-panel)
+    (proto/set-focus fs tree-panel)
+    (update-focus-indicators self ID-TREE)))
+
+(defn- handle-checkbox-changed [self msg]
+  (def state (self :state))
+  (put state :show-private (msg :checked))
+  (def exports-cache (state :exports-cache))
+  (each ck (keys exports-cache)
+    (put exports-cache ck nil))
+  (def tree-panel (proto/find-by-id self ID-TREE))
+  (def search-text (state :search-text))
+  (when (and tree-panel (> (length search-text) 0))
+    (tree/tree-set-filter tree-panel
+                          (make-search-filter search-text
+                                              exports-cache
+                                              (msg :checked))))
+  (refresh-detail self))
+
+(defn- handle-toggle-private [self]
+  (def cb (proto/find-by-id self ID-CHECKBOX))
+  (when cb
+    (def new-val (not (get (cb :state) :checked)))
+    (put (cb :state) :checked new-val)
+    (handle-checkbox-changed self {:checked new-val})
+    {:redraw true}))
+
+# ================================================================
 # App Definition
 # ================================================================
 
@@ -610,35 +683,9 @@
             (on :key [self event]
                 (def k (event :key))
                 (cond
-                  # /: jump to search input
-                  (= k "/")
-                  (do
-                    (def fs (self :focus-state))
-                    (def search-input (proto/find-by-id self ID-SEARCH))
-                    (when (and fs search-input)
-                      (proto/set-focus fs search-input)
-                      (update-focus-indicators self ID-SEARCH))
-                    {:redraw true})
-
-                  # escape: clear search and return to tree
-                  (= k :escape)
-                  (do
-                    (def state (self :state))
-                    (put state :search-text "")
-                    (def search-input (proto/find-by-id self ID-SEARCH))
-                    (when search-input
-                      (put (search-input :state) :value "")
-                      (put (search-input :state) :cursor-pos 0))
-                    (def tree-panel (proto/find-by-id self ID-TREE))
-                    (when tree-panel
-                      (tree/tree-set-filter tree-panel nil))
-
-                    (refresh-detail self "")
-                    (def fs (self :focus-state))
-                    (when (and fs tree-panel)
-                      (proto/set-focus fs tree-panel)
-                      (update-focus-indicators self ID-TREE))
-                    {:redraw true})))
+                  (= k "/") (handle-search-shortcut self)
+                  (= k :escape) (handle-escape self)
+                  (= k :ctrl-p) (handle-toggle-private self)))
 
             # --- Message handlers ---
 
@@ -661,47 +708,17 @@
             # Search text changed: filter tree in real-time
             (on :input-changed [self msg]
                 (when (= (msg :id) ID-SEARCH)
-                  (def state (self :state))
-                  (put state :search-text (msg :value))
-                  (def tree-panel (proto/find-by-id self ID-TREE))
-                  (when tree-panel
-                    (if (> (length (msg :value)) 0)
-                      (tree/tree-set-filter tree-panel
-                                            (make-search-filter (msg :value)
-                                                                (state :exports-cache)
-                                                                (state :show-private)))
-                      (tree/tree-set-filter tree-panel nil)))
-
-                  (sync-after-filter self)))
+                  (handle-input-changed self msg)))
 
             # Enter in search: focus back to tree
             (on :input-submitted [self msg]
                 (when (= (msg :id) ID-SEARCH)
-                  (def fs (self :focus-state))
-                  (def tree-panel (proto/find-by-id self ID-TREE))
-                  (when (and fs tree-panel)
-                    (proto/set-focus fs tree-panel)
-                    (update-focus-indicators self ID-TREE))))
+                  (handle-input-submitted self)))
 
             # Toggle show-private: invalidate cache, refresh
             (on :checkbox-changed [self msg]
                 (when (= (msg :id) ID-CHECKBOX)
-                  (def state (self :state))
-                  (put state :show-private (msg :checked))
-                  # Invalidate exports cache
-                  (def exports-cache (state :exports-cache))
-                  (each ck (keys exports-cache)
-                    (put exports-cache ck nil))
-                  # Re-apply filter if active
-                  (def tree-panel (proto/find-by-id self ID-TREE))
-                  (def search-text (state :search-text))
-                  (when (and tree-panel (> (length search-text) 0))
-                    (tree/tree-set-filter tree-panel
-                                          (make-search-filter search-text
-                                                              exports-cache
-                                                              (msg :checked))))
-
-                  (refresh-detail self)))
+                  (handle-checkbox-changed self msg)))
 
             # Focus changed: update border styles and titles
             (on :focus-changed [self msg]
