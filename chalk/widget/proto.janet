@@ -242,8 +242,23 @@
             (each child (widget :children)
               (find-target child)))))
       (find-target root)
+      # Focus clicked widget (or nearest focusable ancestor) on press
+      (when (and target (= (event :action) :press))
+        (def fs (or (root :focus-state) (init-focus root)))
+        (var fw target)
+        (while (and fw (not (fw :focusable)))
+          (set fw (fw :parent)))
+        (when (and fw (not= fw (focused-widget fs)))
+          (set-focus fs fw)
+          (set result {:redraw true
+                       :msg {:type :focus-changed
+                             :widget-id (fw :id)}})))
       (when (and target (target :handle-event))
-        (set result ((target :handle-event) target event))))
+        (def handler-result ((target :handle-event) target event))
+        (when handler-result
+          (set result (or result @{}))
+          (when (handler-result :redraw) (put result :redraw true))
+          (when (handler-result :msg) (put result :msg (handler-result :msg))))))
 
     :key
     (do
