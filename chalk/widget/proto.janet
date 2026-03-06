@@ -11,12 +11,15 @@
    padding padding-top padding-right padding-bottom padding-left
    flex-direction flex-grow flex-shrink dock focusable
    border-style border-color border-title border-title-align
+   border-color-focused border-title-focused
+   style-focused
    mount unmount render paint handle-event update]
   @{:type type
     :id id
     :classes (or classes @[])
     :state @{}
     :style style
+    :style-focused style-focused
     :layout-node nil
     :children @[]
     :parent nil
@@ -48,6 +51,8 @@
     :border-color border-color
     :border-title border-title
     :border-title-align border-title-align
+    :border-color-focused border-color-focused
+    :border-title-focused border-title-focused
     # Lifecycle hooks
     :mount mount
     :unmount unmount
@@ -212,6 +217,42 @@
     (set-focus focus-state old-focused)
     (put focus-state :index 0)))
 
+(defn widget-focused?
+  "Check if a widget is the currently focused widget."
+  [widget]
+  (var root widget)
+  (while (root :parent)
+    (set root (root :parent)))
+  (when-let [fs (root :focus-state)]
+    (= widget (focused-widget fs))))
+
+(defn resolve-effective-style
+  ```Walk up parent chain to find an inherited style, merge with own style.
+  If the widget is focused and has :style-focused, merges that on top.
+  Returns a merged style table (not a compiled style) or nil.```
+  [widget]
+  (var base nil)
+  (var parent (widget :parent))
+  (while (and parent (nil? base))
+    (when (parent :style)
+      (set base (parent :style)))
+    (set parent (parent :parent)))
+  (def own (widget :style))
+  (def focused-override
+    (when (and (widget :style-focused) (widget-focused? widget))
+      (widget :style-focused)))
+  (def merged
+    (cond
+      (and base own focused-override) (merge base own focused-override)
+      (and base own) (merge base own)
+      (and base focused-override) (merge base focused-override)
+      (and own focused-override) (merge own focused-override)
+      focused-override focused-override
+      own own
+      base base
+      nil))
+  merged)
+
 (defn- bubble-msg
   "Bubble a message from target up through ancestors' :update hooks."
   [target msg]
@@ -253,12 +294,18 @@
           (set result @{:redraw true
                         :msg {:type :focus-changed
                               :widget-id (fw :id)}})))
+      # Save focus-changed msg before handler may produce its own msg
+      (def focus-msg (when result (get result :msg)))
       (when (and target (target :handle-event))
         (def handler-result ((target :handle-event) target event))
         (when handler-result
           (set result (or result @{}))
           (when (handler-result :redraw) (put result :redraw true))
-          (when (handler-result :msg) (put result :msg (handler-result :msg))))))
+          (when (handler-result :msg) (put result :msg (handler-result :msg)))))
+      # Bubble focus-changed separately if handler overwrote it
+      (when (and focus-msg target
+                 (not= focus-msg (get result :msg)))
+        (bubble-msg target focus-msg)))
 
     :key
     (do

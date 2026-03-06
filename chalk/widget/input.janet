@@ -5,21 +5,6 @@
 (import ../terminal/screen)
 (import ../terminal/style)
 
-(defn- resolve-effective-style
-  "Walk up parent chain to find an inherited style, merge with own style."
-  [widget]
-  (var base nil)
-  (var p (widget :parent))
-  (while (and p (nil? base))
-    (when (p :style)
-      (set base (p :style)))
-    (set p (p :parent)))
-  (def own (widget :style))
-  (cond
-    (and base own) (merge base own)
-    own own
-    base base
-    nil))
 
 (defn input-widget
   ```Create a text input widget.
@@ -27,7 +12,7 @@
    placeholder: shown when empty
    on-change: callback (fn [value])
    on-submit: callback (fn [value]) called on enter```
-  [&named value placeholder on-change on-submit id classes style
+  [&named value placeholder on-change on-submit id classes style style-focused
    width height flex-grow flex-shrink margin padding dock]
   (default value "")
   (default placeholder "")
@@ -37,6 +22,7 @@
            :id id
            :classes classes
            :style style
+           :style-focused style-focused
            :width width
            :height (or height 1)
            :flex-grow flex-grow
@@ -127,8 +113,9 @@
              (def pos (state :cursor-pos))
              (def ph (state :placeholder))
              (def w (rect :width))
+             (def focused (proto/widget-focused? self))
 
-             (def effective (resolve-effective-style self))
+             (def effective (proto/resolve-effective-style self))
              (def normal-style
                (when effective (style/make-style ;(kvs effective))))
              (def cursor-style (style/make-style :reverse true))
@@ -143,8 +130,9 @@
                (do
                  (def display-ph (if (> (length ph) w) (string/slice ph 0 w) ph))
                  (screen/screen-put-string scr (rect :col) (rect :row) display-ph ph-style)
-                 # Cursor at start
-                 (screen/screen-put scr (rect :col) (rect :row) " " cursor-style))
+                 # Cursor at start when focused
+                 (when focused
+                   (screen/screen-put scr (rect :col) (rect :row) " " cursor-style)))
                # Show value with cursor
                (do
                  # Scroll if cursor beyond visible area
@@ -158,14 +146,15 @@
                  (def visible (string/slice val scroll (min (length val) (+ scroll w))))
                  (screen/screen-put-string scr (rect :col) (rect :row) visible normal-style)
 
-                 # Draw cursor
-                 (def cursor-col (+ (rect :col) (- pos scroll)))
-                 (when (and (>= cursor-col (rect :col))
-                            (< cursor-col (+ (rect :col) w)))
-                   (def cursor-char (if (< pos (length val))
-                                      (string/from-bytes (get val pos))
-                                      " "))
-                   (screen/screen-put scr cursor-col (rect :row) cursor-char cursor-style)))))))
+                 # Draw cursor only when focused
+                 (when focused
+                   (def cursor-col (+ (rect :col) (- pos scroll)))
+                   (when (and (>= cursor-col (rect :col))
+                              (< cursor-col (+ (rect :col) w)))
+                     (def cursor-char (if (< pos (length val))
+                                        (string/from-bytes (get val pos))
+                                        " "))
+                     (screen/screen-put scr cursor-col (rect :row) cursor-char cursor-style))))))))
 
   # Initialize state
   (put (w :state) :value value)

@@ -12,7 +12,7 @@
 
 ## Testing
 
-- Run tests with `janet-pm test`. All 10 test files in `test/` must pass.
+- Run tests with `janet-pm test`. All 11 test files in `test/` must pass.
 
 ## Planning
 

@@ -188,7 +188,9 @@
          ,;body-code)))
 
   ~(defn ,name [&named focusable
-                border-style border-color border-title border-title-align]
+                border-style border-color border-title border-title-align
+                border-color-focused border-title-focused
+                style-focused]
      (def w (,proto/make-widget
               ,(string name)
               :focusable focusable
@@ -196,6 +198,9 @@
               :border-color border-color
               :border-title border-title
               :border-title-align border-title-align
+              :border-color-focused border-color-focused
+              :border-title-focused border-title-focused
+              :style-focused style-focused
               :handle-event ,handle-event-code
               :update ,update-code
               :paint ,paint-code

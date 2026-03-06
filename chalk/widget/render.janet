@@ -16,13 +16,23 @@
     (def bs (widget :border-style))
     # Draw border frame if widget has one
     (when bs
+      (def focused (proto/widget-focused? widget))
+      (def bc (if (and focused (widget :border-color-focused))
+                (widget :border-color-focused)
+                (widget :border-color)))
+      (def title (if (and focused (widget :border-title-focused))
+                   (widget :border-title-focused)
+                   (widget :border-title)))
+      (def widget-bg (when (widget :style) (get (widget :style) :bg)))
       (def border-s
-        (if-let [bc (widget :border-color)]
-          (style/make-style :fg bc)
+        (if bc
+          (if widget-bg
+            (style/make-style :fg bc :bg widget-bg)
+            (style/make-style :fg bc))
           (when (widget :style)
             (style/make-style ;(kvs (widget :style))))))
       (border-util/paint-border scr rect bs border-s
-                                (widget :border-title)
+                                title
                                 (or (widget :border-title-align) :left)))
     # Widget's paint gets inner rect (inside border) or full rect
     (def paint-rect

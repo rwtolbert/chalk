@@ -5,21 +5,6 @@
 (import ../terminal/screen)
 (import ../terminal/style)
 
-(defn- resolve-effective-style
-  "Walk up parent chain to find an inherited style, merge with own style."
-  [widget]
-  (var base nil)
-  (var p (widget :parent))
-  (while (and p (nil? base))
-    (when (p :style)
-      (set base (p :style)))
-    (set p (p :parent)))
-  (def own (widget :style))
-  (cond
-    (and base own) (merge base own)
-    own own
-    base base
-    nil))
 
 (defn list-widget
   ```Create a scrollable list widget.
@@ -27,9 +12,10 @@
    item-styles: optional array of style tables parallel to items
    selected: initial selected index (default 0)
    on-select: callback (fn [index item]) called on enter```
-  [&named items item-styles selected on-select id classes style
+  [&named items item-styles selected on-select id classes style style-focused
    width height flex-grow flex-shrink margin padding dock
-   border-style border-color border-title border-title-align]
+   border-style border-color border-title border-title-align
+   border-color-focused border-title-focused]
   (default items @[])
   (default selected 0)
 
@@ -38,6 +24,7 @@
            :id id
            :classes classes
            :style style
+           :style-focused style-focused
            :width width
            :height height
            :flex-grow flex-grow
@@ -49,6 +36,8 @@
            :border-color border-color
            :border-title border-title
            :border-title-align border-title-align
+           :border-color-focused border-color-focused
+           :border-title-focused border-title-focused
            :focusable true
 
            :handle-event
@@ -146,7 +135,7 @@
                (set offset sel))
              (put state :scroll-offset offset)
 
-             (def effective (resolve-effective-style self))
+             (def effective (proto/resolve-effective-style self))
              (def normal-style
                (when effective (style/make-style ;(kvs effective))))
              (def sel-style (style/make-style :reverse true

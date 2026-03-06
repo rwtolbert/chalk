@@ -45,6 +45,7 @@ mouse tracking, and cursor visibility. No termcap/terminfo lookup.
 ```
 chalk/
   app.janet                       # defapp macro + run lifecycle
+  theme.janet                     # theme registry, palettes, color formatting
   platform/
     posix.janet                   # FFI bindings to libc
     init.janet                    # platform abstraction
@@ -94,6 +95,7 @@ test/
   test-proto.janet                # Widget protocol, focus, dispatch
   test-border-util.janet          # Border drawing
   test-tree.janet                 # Tree widget
+  test-theme.janet                # Theme registry, palettes, formatting
 ```
 
 ## Widget System
@@ -189,15 +191,17 @@ terminfo lookup only if real users hit compatibility issues. If we do add it,
 Janet can shell out to `tput` for individual capabilities, similar to how we
 use `stty` for terminal size.
 
-### Theme System
+### Theme System (implemented)
 
-Most apps shouldn't need to think about individual colors. A developer
-should be able to pick a theme and have everything look right, or let
-end users choose from a set of themes.
+Themes are pure data - a table of semantic color roles mapped to color
+values. Apps look up palette colors and use them directly in widget
+properties and CSS strings. No CSS generation layer; the theme module
+provides data and formatting, not behavior.
+
+**File:** `chalk/theme.janet`
+**Tests:** `test/test-theme.janet` (22 tests)
 
 **Semantic color roles:**
-A theme is a table mapping semantic roles to colors. Widgets and CSS
-reference roles, not raw colors.
 
 ```janet
 {:fg :default           # main text
@@ -214,87 +218,57 @@ reference roles, not raw colors.
  :error :red}
 ```
 
-The key insight: `:default` (SGR 39/49) means "use the terminal's own
-fg/bg." This is what makes the default theme work in both light and dark
-terminals without any detection - the terminal already knows its colors.
+`:default` (SGR 39/49) means "use the terminal's own fg/bg," so the
+default theme works in both light and dark terminals automatically.
+RGB themes (catppuccin, dracula, etc.) paint both fg and bg, so they
+look correct regardless of terminal background.
 
-**Developer API:**
+**API:**
 
 ```janet
 (import chalk/theme)
 
-# Simple: pick a built-in theme
-(app/defapp my-app
-  (css (theme/css))                      # :default theme
-  (css (theme/css :catppuccin-mocha))    # specific theme
-  ...)
+# Get resolved palette (missing roles filled with defaults)
+(def p (theme/palette :dracula))
 
-# Let end users choose via env var or config
-(def user-theme (keyword (or (os/getenv "CHALK_THEME") "default")))
-(app/defapp my-app
-  (css (theme/css user-theme))
-  ...)
+# Use palette colors directly in widget properties
+(text/text "hello" :style {:fg (p :primary)})
+(list/list-widget :border-color (p :border-active))
 
-# Define a custom theme (same structure as built-ins)
+# Format palette color for CSS strings
+(def app-css
+  (string `#header { background: ` (theme/color p :secondary) `; }`))
+
+# Register a custom theme (same mechanism as built-ins)
 (theme/deftheme :my-corp
-  {:fg [45 50 55]
-   :bg [250 250 245]
-   :primary [0 120 180]
-   :muted [140 140 140]
-   :border [200 200 200]
-   :border-active [0 120 180]
-   ...})
+  {:fg [45 50 55] :bg [250 250 245] :primary [0 120 180] ...})
 
-# Now available alongside built-ins
-(css (theme/css :my-corp))
+# Let end users choose via env var
+(def theme-name (keyword (or (os/getenv "CHALK_THEME") "default")))
+(def p (theme/palette theme-name))
 
-# List all available themes (built-in + registered)
-(theme/list-themes)  # => @[:default :dark :light :catppuccin-mocha ... :my-corp]
+# List all available themes
+(theme/list-themes)  # => @[:catppuccin-latte :catppuccin-mocha :dark :default ...]
 ```
 
-**Built-in themes:**
-
-Start with a small core set:
-- `:default` - ANSI `:default` fg/bg, works universally in light and dark
-- `:dark` - explicit dark-background colors
-- `:light` - explicit light-background colors
-
-Then add popular RGB palettes (all well-documented, permissive licenses):
-- `:catppuccin-mocha` (dark) / `:catppuccin-latte` (light)
-- `:dracula`
-- `:solarized-dark` / `:solarized-light`
-- `:nord`
-- `:gruvbox-dark` / `:gruvbox-light`
-- `:tokyo-night`
-
-These are just data - a table of role-to-color mappings - so adding new
-palettes is trivial.
-
-**How it works internally:**
-
-`theme/css` takes a palette name, looks up the role table, and generates
-CSS targeting chalk's built-in widget types. The generated CSS sits at
-the bottom of the cascade, so app-specific CSS overrides it naturally.
-
-`theme/deftheme` registers a palette table under a name in a module-level
-registry. Built-in themes are registered at module load time. Custom themes
-use the exact same mechanism - there is no separate "custom theme" concept.
+**Built-in themes (11):**
+`:default`, `:dark`, `:light`,
+`:catppuccin-mocha`, `:catppuccin-latte`,
+`:dracula`,
+`:solarized-dark`, `:solarized-light`,
+`:nord`,
+`:gruvbox-dark`, `:gruvbox-light`,
+`:tokyo-night`
 
 **Tie-in with light/dark detection:**
 
-For the `:default` theme, no detection is needed - `:default` fg/bg adapts
-automatically. For apps that want to auto-select between paired themes
-(e.g., catppuccin-mocha vs catppuccin-latte), the OSC 11 background query
-from Terminal Environment Detection provides the signal:
+For the `:default` theme, no detection is needed. For apps that want to
+auto-select between paired RGB themes, the OSC 11 background query
+(see Terminal Environment Detection) would provide the signal:
 
 ```janet
 (def mode (platform/detect-color-mode))  # :dark, :light, or :unknown
-(def theme-name (case mode
-                  :light :catppuccin-latte
-                  :catppuccin-mocha))
-(app/defapp my-app
-  (css (theme/css theme-name))
-  ...)
+(def p (theme/palette (case mode :light :catppuccin-latte :catppuccin-mocha)))
 ```
 
 ### Dialog System

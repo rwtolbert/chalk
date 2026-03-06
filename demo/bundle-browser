@@ -21,6 +21,19 @@
 (import chalk/widget/tree)
 (import chalk/widget/input)
 (import chalk/widget/checkbox)
+(import chalk/theme)
+
+# --- Theme ---
+(def theme-name (keyword (or (os/getenv "CHALK_THEME") "default")))
+(def p
+  (if (find |(= $ theme-name) (theme/list-themes))
+    (theme/palette theme-name)
+    (do
+      (eprintf "unknown theme: %s, using default" theme-name)
+      (eprintf "available themes:")
+      (each t (theme/list-themes)
+        (eprintf "  %s" t))
+      (theme/palette :default))))
 
 # --- Widget IDs (single source of truth) ---
 (def ID-TREE "tree-panel")
@@ -433,7 +446,9 @@
     (put (detail-panel :state) :item-styles ds)
     (put (detail-panel :state) :selected 0)
     (put (detail-panel :state) :scroll-offset 0)
-    (put detail-panel :border-title (string " " selected-mod " "))))
+    (def title (string " " selected-mod " "))
+    (put detail-panel :border-title title)
+    (put detail-panel :border-title-focused (string title "(active) "))))
 
 (defn- clear-detail [self]
   (def state (self :state))
@@ -444,7 +459,8 @@
     (put (detail-panel :state) :item-styles @[nil])
     (put (detail-panel :state) :selected 0)
     (put (detail-panel :state) :scroll-offset 0)
-    (put detail-panel :border-title " Exports ")))
+    (put detail-panel :border-title " Exports ")
+    (put detail-panel :border-title-focused " Exports (active) ")))
 
 (defn- show-node-detail [self node]
   "Update the detail panel based on the currently hovered/selected tree node."
@@ -461,33 +477,6 @@
         (put state :selected-mod (string (data :name) "/init"))
         (refresh-detail self))
       (clear-detail self))))
-
-(defn- update-focus-indicators [self focused-id]
-  (def state (self :state))
-  (def selected-mod (state :selected-mod))
-
-  (def tree-panel (proto/find-by-id self ID-TREE))
-  (when tree-panel
-    (def active (= focused-id ID-TREE))
-    (put tree-panel :border-color (if active :cyan :white))
-    (put tree-panel :border-title
-         (if active " Bundles (active) " " Bundles ")))
-
-  (def detail-panel (proto/find-by-id self ID-DETAIL))
-  (when detail-panel
-    (def active (= focused-id ID-DETAIL))
-    (put detail-panel :border-color (if active :cyan :white))
-    (def base-title (if selected-mod
-                      (string " " selected-mod " ")
-                      " Exports "))
-    (put detail-panel :border-title
-         (if active (string base-title "(active) ") base-title)))
-
-  (def cb (proto/find-by-id self ID-CHECKBOX))
-  (when cb
-    (put cb :style (if (= focused-id ID-CHECKBOX)
-                     {:fg :cyan}
-                     {:fg :white}))))
 
 (defn- sync-after-filter [self]
   "After a filter change, update detail panel from tree's current selection."
@@ -506,8 +495,7 @@
   (def fs (self :focus-state))
   (def search-input (proto/find-by-id self ID-SEARCH))
   (when (and fs search-input)
-    (proto/set-focus fs search-input)
-    (update-focus-indicators self ID-SEARCH))
+    (proto/set-focus fs search-input))
   {:redraw true})
 
 (defn- handle-escape [self]
@@ -523,8 +511,7 @@
   (refresh-detail self "")
   (def fs (self :focus-state))
   (when (and fs tree-panel)
-    (proto/set-focus fs tree-panel)
-    (update-focus-indicators self ID-TREE))
+    (proto/set-focus fs tree-panel))
   {:redraw true})
 
 (defn- handle-input-changed [self msg]
@@ -544,8 +531,7 @@
   (def fs (self :focus-state))
   (def tree-panel (proto/find-by-id self ID-TREE))
   (when (and fs tree-panel)
-    (proto/set-focus fs tree-panel)
-    (update-focus-indicators self ID-TREE)))
+    (proto/set-focus fs tree-panel)))
 
 (defn- handle-checkbox-changed [self msg]
   (def state (self :state))
@@ -574,22 +560,22 @@
 # App Definition
 # ================================================================
 
-(def app-css `
-  #header {
-    background: blue;
-    color: white;
-    bold: true;
-    dock: top;
-    height: 1;
-  }
-
-  #footer {
-    background: bright-black;
-    color: white;
-    dock: bottom;
-    height: 1;
-  }
-`)
+(def app-css
+  (string
+    `#header {
+       background: ` (theme/color p :secondary) `;
+       color: ` (theme/color p :fg) `;
+       bold: true;
+       dock: top;
+       height: 1;
+     }
+     #footer {
+       background: ` (theme/color p :surface-alt) `;
+       color: ` (theme/color p :fg) `;
+       dock: bottom;
+       height: 1;
+     }
+    `))
 
 (defn- build-ui []
   @[# Header
@@ -609,7 +595,8 @@
           :id ID-SEARCH
           :value ""
           :placeholder "type to filter..."
-          :style {:fg :white}
+          :style {:fg (p :fg)}
+          :style-focused {:fg (p :primary)}
           :flex-grow 1
           :height 1)
         (text/text " " :width 1)
@@ -618,7 +605,8 @@
           :checked false
           :label "Show private members"
           :checkbox-style :square
-          :style {:fg :white}
+          :style {:fg (p :fg)}
+          :style-focused {:fg (p :primary)}
           :height 1)
         (text/text "" :flex-grow 1)
         (text/text " esc: clear | ctrl-c: quit " :width 28)])
@@ -628,6 +616,7 @@
       :id "main"
       :flex-direction :row
       :flex-grow 1
+      :style {:fg (p :fg) :bg (p :bg)}
       :children
       @[# Tree panel (border as property)
         (tree/tree-widget
@@ -636,21 +625,25 @@
           :indent 2
           :auto-expand true
           :max-width 40
-          :style {:fg :white}
+          :style {:fg (p :fg) :bg (p :surface)}
           :width 32
           :border-style :rounded
-          :border-color :cyan
-          :border-title " Bundles (active) ")
+          :border-color (p :border)
+          :border-color-focused (p :border-active)
+          :border-title " Bundles "
+          :border-title-focused " Bundles (active) ")
 
         # Detail panel (border as property)
         (list/list-widget
           :id ID-DETAIL
           :items @["Select a module to view exports"]
-          :style {:fg :white}
+          :style {:fg (p :fg) :bg (p :surface)}
           :flex-grow 1
           :border-style :rounded
-          :border-color :white
-          :border-title " Exports ")])])
+          :border-color (p :border)
+          :border-color-focused (p :border-active)
+          :border-title " Exports "
+          :border-title-focused " Exports (active) ")])])
 
 (app/defapp bundle-browser
             (state {:bundles @[]
@@ -676,8 +669,7 @@
                    # Set initial focus on tree-panel
                    (def fs (proto/init-focus self))
                    (when tree-panel
-                     (proto/set-focus fs tree-panel))
-                   (update-focus-indicators self ID-TREE))
+                     (proto/set-focus fs tree-panel)))
 
             # --- Global key handler (fallback when focused widget doesn't consume) ---
             (on :key [self event]
@@ -718,11 +710,7 @@
             # Toggle show-private: invalidate cache, refresh
             (on :checkbox-changed [self msg]
                 (when (= (msg :id) ID-CHECKBOX)
-                  (handle-checkbox-changed self msg)))
-
-            # Focus changed: update border styles and titles
-            (on :focus-changed [self msg]
-                (update-focus-indicators self (msg :widget-id))))
+                  (handle-checkbox-changed self msg))))
 
 (defn main [&] (app/run bundle-browser))
 (main)

@@ -6,21 +6,6 @@
 (import ../terminal/screen)
 (import ../terminal/style)
 
-(defn- resolve-effective-style
-  "Walk up parent chain to find an inherited style, merge with own style."
-  [widget]
-  (var base nil)
-  (var p (widget :parent))
-  (while (and p (nil? base))
-    (when (p :style)
-      (set base (p :style)))
-    (set p (p :parent)))
-  (def own (widget :style))
-  (cond
-    (and base own) (merge base own)
-    own own
-    base base
-    nil))
 
 (defn- branch?
   "True if node has non-empty :children."
@@ -145,8 +130,9 @@
    max-width: upper bound on width when auto-expand is on (default nil = no limit)```
   [&named nodes indent expanded-prefix collapsed-prefix leaf-prefix
    initially-expanded filter-fn on-select auto-expand max-width
-   id classes style width height flex-grow flex-shrink margin padding dock
-   border-style border-color border-title border-title-align]
+   id classes style style-focused width height flex-grow flex-shrink margin padding dock
+   border-style border-color border-title border-title-align
+   border-color-focused border-title-focused]
   (default nodes @[])
   (default indent 4)
   (default expanded-prefix "v ")
@@ -160,6 +146,7 @@
            :id id
            :classes classes
            :style style
+           :style-focused style-focused
            :width width
            :height height
            :flex-grow flex-grow
@@ -171,6 +158,8 @@
            :border-color border-color
            :border-title border-title
            :border-title-align border-title-align
+           :border-color-focused border-color-focused
+           :border-title-focused border-title-focused
            :focusable true
 
            :handle-event
@@ -332,7 +321,7 @@
                (set offset sel))
              (put state :scroll-offset offset)
 
-             (def effective (resolve-effective-style self))
+             (def effective (proto/resolve-effective-style self))
              (def normal-style
                (when effective (style/make-style ;(kvs effective))))
              (def sel-style (style/make-style :reverse true

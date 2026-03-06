@@ -6,23 +6,6 @@
 (import ../terminal/screen)
 (import ../terminal/style)
 
-(defn- resolve-effective-style
-  "Walk up parent chain to find an inherited style, merge with own style."
-  [widget]
-  # Find nearest ancestor style
-  (var base nil)
-  (var p (widget :parent))
-  (while (and p (nil? base))
-    (when (p :style)
-      (set base (p :style)))
-    (set p (p :parent)))
-
-  (def own (widget :style))
-  (cond
-    (and base own) (style/make-style ;(kvs (merge base own)))
-    own (style/make-style ;(kvs own))
-    base (style/make-style ;(kvs base))
-    nil))
 
 (defn text
   ```Create a text widget. Content is a string displayed within the rect.
@@ -46,7 +29,8 @@
     :dock dock
     :paint
     (fn [self scr rect]
-      (def s (resolve-effective-style self))
+      (def s (when-let [eff (proto/resolve-effective-style self)]
+               (style/make-style ;(kvs eff))))
       (def max-col (+ (rect :col) (rect :width)))
       (def max-row (+ (rect :row) (rect :height)))
       # Fill background across full rect width

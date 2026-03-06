@@ -5,21 +5,6 @@
 (import ../terminal/screen)
 (import ../terminal/style)
 
-(defn- resolve-effective-style
-  "Walk up parent chain to find an inherited style, merge with own style."
-  [widget]
-  (var base nil)
-  (var p (widget :parent))
-  (while (and p (nil? base))
-    (when (p :style)
-      (set base (p :style)))
-    (set p (p :parent)))
-  (def own (widget :style))
-  (cond
-    (and base own) (merge base own)
-    own own
-    base base
-    nil))
 
 (def checkbox-styles
   "Named checkbox character sets: [unchecked checked]."
@@ -33,7 +18,7 @@
    label: text shown after the indicator
    on-change: callback (fn [checked])
    checkbox-style: :ascii, :square (default), or :round```
-  [&named checked label on-change checkbox-style id classes style
+  [&named checked label on-change checkbox-style id classes style style-focused
    width height flex-grow flex-shrink margin padding dock]
   (default checked false)
   (default label "")
@@ -50,6 +35,7 @@
            :id id
            :classes classes
            :style style
+           :style-focused style-focused
            :width (or width auto-width)
            :height (or height 1)
            :flex-grow flex-grow
@@ -95,7 +81,7 @@
              (def display (string indicator " " lbl))
              (def w (rect :width))
 
-             (def effective (resolve-effective-style self))
+             (def effective (proto/resolve-effective-style self))
              (def normal-style
                (when effective (style/make-style ;(kvs effective))))
 

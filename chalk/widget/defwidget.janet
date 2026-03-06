@@ -122,7 +122,9 @@
   # Generate constructor
   ~(defn ,name [&named id classes style width height flex-grow flex-shrink
                 margin padding dock flex-direction focusable
-                border-style border-color border-title border-title-align]
+                border-style border-color border-title border-title-align
+                border-color-focused border-title-focused
+                style-focused]
      (def w (,proto/make-widget
               ,(string name)
               :id id
@@ -141,6 +143,9 @@
               :border-color border-color
               :border-title border-title
               :border-title-align border-title-align
+              :border-color-focused border-color-focused
+              :border-title-focused border-title-focused
+              :style-focused style-focused
               :handle-event ,handle-event-code
               :update ,update-code
               :paint ,paint-code

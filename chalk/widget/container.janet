@@ -5,28 +5,13 @@
 (import ../terminal/screen)
 (import ../terminal/style)
 
-(defn- resolve-effective-style
-  "Walk up parent chain to find an inherited style, merge with own style."
-  [widget]
-  (var base nil)
-  (var p (widget :parent))
-  (while (and p (nil? base))
-    (when (p :style)
-      (set base (p :style)))
-    (set p (p :parent)))
-
-  (def own (widget :style))
-  (cond
-    (and base own) (merge base own)
-    own own
-    base base
-    nil))
 
 (defn container
   "Create a container widget. Children are added via widget-add-child."
   [&named id classes style flex-direction width height flex-grow flex-shrink
    margin padding dock children
-   border-style border-color border-title border-title-align]
+   border-style border-color border-title border-title-align
+   border-color-focused border-title-focused]
   (def w (proto/make-widget
            "container"
            :id id
@@ -44,9 +29,11 @@
            :border-color border-color
            :border-title border-title
            :border-title-align border-title-align
+           :border-color-focused border-color-focused
+           :border-title-focused border-title-focused
            :paint
            (fn [self scr rect]
-             (def effective (resolve-effective-style self))
+             (def effective (proto/resolve-effective-style self))
              (when-let [st effective
                         bg (get st :bg)]
                (def s (style/make-style ;(kvs st)))
