@@ -13,3 +13,10 @@
 ## Testing
 
 - Run tests with `janet-pm test`. All 10 test files in `test/` must pass.
+
+## Planning
+
+- `PLAN.md` is the living design document. Keep it up to date as work progresses.
+- When completing a planned feature, update PLAN.md to reflect the new status.
+- When adding an unplanned feature (ad-hoc work), add it to PLAN.md so the document stays accurate.
+- When design decisions change or new ideas emerge during implementation, capture them in PLAN.md.
